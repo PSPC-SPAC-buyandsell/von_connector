@@ -1,0 +1,10 @@
+{
+    "type": "schema-lookup",
+    "data": {
+        "schema": {
+            "issuer-did": "%s",
+            "name": "%s",
+            "version": "%s"
+        }
+    }
+}

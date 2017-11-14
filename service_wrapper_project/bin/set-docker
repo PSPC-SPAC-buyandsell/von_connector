@@ -1,0 +1,18 @@
+#!/bin/bash
+
+PID_RUNNING=$(docker ps --filter ancestor=indy_pool --filter status=running --no-trunc | sed '1,1d' | awk '{print $1}')
+PID_EXITED=$(docker ps --filter ancestor=indy_pool --filter status=exited --no-trunc | sed '1,1d' | awk '{print $1}')
+
+if [[ -n ${PID_EXITED} ]]
+then
+    docker rm ${PID_EXITED} &> /dev/null
+fi
+
+if [[ -z ${PID_RUNNING} ]]
+then
+    docker run -d --ip=10.0.0.2 --net=indy_pool_network indy_pool &>/dev/null
+fi
+
+# for process exit, zero means OK
+RC=$((1 - $(docker ps --filter ancestor=indy_pool --filter status=running --no-trunc | sed '1,1d' | wc -l)))
+echo ${RC}

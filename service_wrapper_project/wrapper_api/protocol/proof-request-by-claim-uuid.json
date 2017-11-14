@@ -1,0 +1,6 @@
+{
+    "type": "proof-request-by-claim-uuid",
+    "data": {
+        "claim-uuid": %s
+    }
+}

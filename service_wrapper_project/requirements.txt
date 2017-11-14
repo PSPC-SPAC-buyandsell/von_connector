@@ -1,0 +1,11 @@
+base58>=0.2.5
+certifi==2017.7.27.1
+chardet>=3.0.4
+Django>=1.11.5
+django-environ>=0.4.4
+djangorestframework==3.6.4
+requests>=2.18.4
+python3-indy==1.0.0-dev242
+six>=1.11.0
+pexpect>=4.3.0
+von_agent>=0.0.0

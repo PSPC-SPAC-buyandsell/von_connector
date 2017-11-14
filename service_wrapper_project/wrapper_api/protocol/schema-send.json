@@ -1,0 +1,21 @@
+{
+    "type": "schema-send",
+    "data": {
+        "schema": {
+            "issuer-did": "%s",
+            "name": "%s",
+            "version": "%s"
+        },
+        "attr-names": [
+            "id",
+            "busId",
+            "orgTypeId",
+            "jurisdictionId",
+            "LegalName",
+            "effectiveDate",
+            "effectiveDate",
+            "endDate",
+            "sriRegDate"
+        ]
+    }
+}

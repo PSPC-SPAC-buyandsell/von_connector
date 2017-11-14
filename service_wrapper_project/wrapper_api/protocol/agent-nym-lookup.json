@@ -1,0 +1,8 @@
+{
+    "type": "agent-nym-lookup",
+    "data": {
+        "agent-nym": {
+            "did": "%s"
+        }
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "type": "agent-nym-send",
+    "data": {
+        "agent-nym": {
+            "did": "%s",
+            "verkey": "%s"
+        }
+    }
+}

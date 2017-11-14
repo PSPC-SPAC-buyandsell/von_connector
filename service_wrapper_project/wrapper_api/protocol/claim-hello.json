@@ -1,0 +1,6 @@
+{
+    "type": "claim-hello",
+    "data": {
+        "issuer-did": "%s"
+    }
+}

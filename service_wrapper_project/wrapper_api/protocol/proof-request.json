@@ -1,0 +1,10 @@
+{
+    "type": "proof-request",
+    "data": {
+        "claim-filter": {
+            "attr-match": %s,
+            "predicate-match": [
+            ]
+        }
+    }
+}

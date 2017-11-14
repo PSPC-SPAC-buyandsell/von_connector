@@ -1,0 +1,13 @@
+#!/bin/bash
+
+DIR_ROOT="$(realpath $(dirname ${BASH_SOURCE[0]}))"
+DIR_CFG="${DIR_ROOT}/service_wrapper_project/wrapper_api/config"
+CFG_INI="${DIR_CFG}/config.ini"
+
+if [[ $(grep -P '^genesis.txn.path=.*' ${CFG_INI} | wc -l) -eq 0 ]]
+then
+    echo "genesis.txn.path=${DIR_CFG}/bootstrap/genesis.txn" >> "${CFG_INI}"
+fi
+
+DIR_USR_LIB="${DIR_ROOT}/usr-lib"
+cp -p "${DIR_USR_LIB}/libindy.so" /usr/lib/

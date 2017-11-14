@@ -1,0 +1,7 @@
+{
+    "type": "verification-request",
+    "data": {
+        "proof-req": %s,
+        "proof": %s
+    }
+}

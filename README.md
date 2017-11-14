@@ -29,7 +29,7 @@ To install the package, activate the virtual environment on python 3.5, change t
 (py35) $ pip install -Ur service_wrapper_project/requirements.txt
 ```
 
-The `configure` script completes the configuration file, wiring the genesis transaction file into the application configuration from the current installation directory.
+The `configure` script completes the configuration file, wiring the genesis transaction file into the application configuration from the current installation directory, and copies the libindy.so binary into `/usr/lib`.
 
 # Using the Agents
 The pytest code exercises the four service wrapper APIs above, each delegating to its respective von_agent. To complete the demonstration, a front end may wire the service wrappers to its user interface, providing an accessible view.

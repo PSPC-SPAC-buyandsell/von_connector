@@ -10,4 +10,6 @@ then
 fi
 
 DIR_USR_LIB="${DIR_ROOT}/usr-lib"
-cp -p "${DIR_USR_LIB}/libindy.so" /usr/lib/
+cd "${DIR_USR_LIB}"
+tar -xpvzf libindy.so.tgz
+mv /libindy.so" /usr/lib/

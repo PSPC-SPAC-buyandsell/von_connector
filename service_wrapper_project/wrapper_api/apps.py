@@ -52,24 +52,11 @@ def _handle_SIGINT(signal, frame):
 def _cleanup():
     ag = cache.get('agent')
     if ag is not None:
-        with open('/tmp/sk.txt', 'a') as f:
-            f.write('{} closing wallet {} on handle {}\n'.format(
-                ag.__class__.__name__,
-                ag.wallet.name, ag.wallet.handle))
         do(ag.close())
-    else:
-        with open('/tmp/sk.txt', 'a') as f:
-            f.write('(ag is None)\n')
 
     p = cache.get('pool')
     if p is not None:
-        with open('/tmp/sk.txt', 'a') as f:
-            f.write('closing pool {} on handle {}\n'.format(p.name, p.handle))
         do(p.close())
-    else:
-        with open('/tmp/sk.txt', 'a') as f:
-            f.write('(p is None)\n')
-
 
 class WrapperApiConfig(AppConfig):
     name = 'wrapper_api'

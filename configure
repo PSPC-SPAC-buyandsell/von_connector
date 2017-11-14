@@ -11,5 +11,5 @@ fi
 
 DIR_USR_LIB="${DIR_ROOT}/usr-lib"
 cd "${DIR_USR_LIB}"
-tar -xpvzf libindy.so.tgz
-mv /libindy.so" /usr/lib/
+tar -xpvzf libindy.so.tgz &> /dev/null
+mv libindy.so /usr/lib/

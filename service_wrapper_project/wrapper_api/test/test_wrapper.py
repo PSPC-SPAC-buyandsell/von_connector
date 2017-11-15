@@ -48,11 +48,16 @@ class Wrapper:
             ],
             timeout=180)
         if rc == 1:
-            raise ValueError('Service wrapper for {} error: {}'.format(self._agent_profile, self._proc.after.decode()))
+            raise ValueError('Service wrapper for {} error: {}'.format(
+                self._agent_profile,
+                self._proc.after.decode()))
         elif rc == 2:
-            raise ValueError('Service wrapper for {} stopped'.format(self._agent_profile))
+            raise ValueError('Service wrapper for {} stopped: {}'.format(
+                self._agent_profile,
+                self._proc.before.decode()))
         elif rc == 3:
-            raise ValueError('Timed out waiting on service wrapper for {}'.format(self._agent_profile))
+            raise ValueError('Timed out waiting on service wrapper for {}'.format(
+                self._agent_profile))
         return rc
 
     def stop(self):
@@ -70,7 +75,7 @@ def set_docker():
     if rc == 1:
         raise ValueError('Docker container/network could not start')
     elif rc == 2:
-        raise ValueError('Docker script stopped')
+        raise ValueError('Docker script stopped: {}'.format(proc.before.decode()))
     elif rc == 3:
         raise ValueError('Timed out waiting on docker script')
     return rc

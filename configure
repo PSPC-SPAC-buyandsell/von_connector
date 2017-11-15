@@ -8,8 +8,3 @@ if [[ $(grep -P '^genesis.txn.path=.*' ${CFG_INI} | wc -l) -eq 0 ]]
 then
     echo "genesis.txn.path=${DIR_CFG}/bootstrap/genesis.txn" >> "${CFG_INI}"
 fi
-
-DIR_USR_LIB="${DIR_ROOT}/usr-lib"
-cd "${DIR_USR_LIB}"
-tar -xpvzf libindy.so.tgz &> /dev/null
-mv libindy.so /usr/lib/

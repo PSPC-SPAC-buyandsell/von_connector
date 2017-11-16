@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DIR_ROOT="$(realpath $(dirname ${BASH_SOURCE[0]}))"
+DIR_ROOT="$(readlink -f $(dirname ${BASH_SOURCE[0]}))"
 DIR_CFG="${DIR_ROOT}/service_wrapper_project/wrapper_api/config"
 CFG_INI="${DIR_CFG}/config.ini"
 

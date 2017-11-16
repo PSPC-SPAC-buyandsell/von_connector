@@ -15,27 +15,9 @@ The demonstration defines four agents:
     - a verifier of claims that the BC Registrar issues and the Org Book proves
     - an issuer holder, and porver for its own claims of SRI registration.
 
-# Prerequisites
-Use the directions at `https://github.com/hyperledger/indy-sdk/blob/master/doc/ubuntu-build.md` to:
-  - set up the docker `indy_pool` container and the docker `indy_pool_network` network.
-  - create a virtual environment on python 3.5
-
-# Installation
-To install the package, activate the virtual environment on python 3.5, change to the parent of the installation directory, and then issue:
-```
-(py35) $ git clone https://github.com/PSPC-SPAC-buyandsell/von_connector.git
-(py35) $ cd von_connector
-(py35) $ sudo ./configure
-(py35) $ pip install -Ur service_wrapper_project/requirements.txt
-```
-
-The `configure` script completes the configuration file, wiring the genesis transaction file into the application configuration from the current installation directory.
-
-# Using the Agents
-The pytest code exercises the four service wrapper APIs above, each delegating to its respective von_agent. To complete the demonstration, a front end may wire the service wrappers to its user interface, providing an accessible view.
-
-To run the test code, activate the virtual environment on python 3.5, then from the installation directory issue:
-```
-(py35) $ cd service_wrapper_project/wrapper_api/tests
-(py35) $ pytest -s test_wrapper.py
-```
+## Documentation
+The design document is available from the `von_base` repository (<https://github.com/PSPC-SPAC-buyandsell/von_base.git>) at `doc/agent-design.doc`. It discusses in detail the packages comprising the technology demonstrator project:
+  - `von_base`
+  - `von_agent`
+  - `von_connector`
+including instructions for installation, configuration, and operation.

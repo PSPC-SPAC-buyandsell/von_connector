@@ -63,6 +63,7 @@ class Wrapper:
     def stop(self):
         if self._proc.isalive():
             self._proc.sendcontrol('c')
+            print("\n\n== X == sleeping a few seconds to allow {} to clean up".format(self._agent_profile))
             sleep(3)  # give it enough time to clean up ~/.indy_client/...
             if self._proc.isalive():
                 self._proc.close()
@@ -150,7 +151,7 @@ async def test_wrapper(
     for agent_profile in agent_profiles:
         service_wrapper[agent_profile] = Wrapper(agent_profile)
         service_wrapper[agent_profile].start()
-        print("\n\n== 2 == Started wrapper: {}".format(agent_profile))
+        print("\n\n== 2.{} == Started wrapper: {}".format(agent_profiles.index(agent_profile), agent_profile))
     atexit.register(shutdown, service_wrapper)
 
     # 2. ensure all demo agents (wrappers) are up

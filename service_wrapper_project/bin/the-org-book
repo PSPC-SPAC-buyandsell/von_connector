@@ -17,4 +17,4 @@
 #
 
 cd $(dirname $(readlink -f $(dirname ${BASH_SOURCE[0]})))
-RUST_LOG=error TEST_POOL_IP=10.0.0.2 AGENT_PROFILE=the-org-book python manage.py runserver --settings=config.settings.local 0.0.0.0:9702 --noreload
+RUST_LOG=error TEST_POOL_IP=${TEST_POOL_IP:-10.0.0.2} AGENT_PROFILE=the-org-book python manage.py runserver --settings=config.settings.local 0.0.0.0:9702 --noreload

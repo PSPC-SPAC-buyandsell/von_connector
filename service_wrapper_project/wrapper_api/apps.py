@@ -17,6 +17,7 @@ limitations under the License.
 from django.apps.config import AppConfig
 from django.core.cache import cache
 from os.path import abspath, dirname, join as pjoin
+from os import environ
 from von_agent.nodepool import NodePool
 from von_agent.demo_agents import TrustAnchorAgent, SRIAgent, BCRegistrarAgent, OrgBookAgent
 from wrapper_api.config import init_config
@@ -27,27 +28,18 @@ import atexit
 import json
 import logging
 import requests
-# import signal
-# import sys
+
 
 PATH_PREFIX_SLASH='api/v0/'
 
-LOG_FORMAT='%(levelname)-8s || %(name)-12s || %(message)s'
-logging.basicConfig(
-    level=logging.DEBUG,
-    format=LOG_FORMAT)
+LOG_FORMAT='%(levelname)-8s | %(name)-12s | %(message)s'
+logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 logging.getLogger('asyncio').setLevel(logging.ERROR)
 logging.getLogger('von_agent').setLevel(logging.ERROR)
 logging.getLogger('indy').setLevel(logging.ERROR)
 logging.getLogger('requests').setLevel(logging.ERROR)
 logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 
-
-"""
-def _handle_SIGINT(signal, frame):
-    _cleanup()
-    sys.exit(0)
-"""
 
 def _cleanup():
     ag = cache.get('agent')
@@ -68,9 +60,11 @@ class WrapperApiConfig(AppConfig):
         base_api_url_path = PATH_PREFIX_SLASH.strip('/')
 
         role = (cfg['Agent']['role'] or '').lower().replace(' ', '')  # will be a dir as a pool name: spaces are evil
+        profile = environ.get('AGENT_PROFILE').lower().replace(' ', '') # several profiles may share a role
+        logging.debug("Starting agent; profile={}, role={}".format(profile, role))
 
         p = None  # the node pool
-        p = NodePool('pool.{}'.format(role), cfg['Pool']['genesis.txn.path'])
+        p = NodePool('pool.{}'.format(profile), cfg['Pool']['genesis.txn.path'])
         do(p.open())
         assert p.handle
         cache.set('pool', p)
@@ -81,7 +75,7 @@ class WrapperApiConfig(AppConfig):
             ag = TrustAnchorAgent(
                 p,
                 cfg['Agent']['seed'],
-                'wallet-{}'.format(role),
+                'wallet-{}'.format(profile),
                 None,
                 cfg['Agent']['host'],
                 int(cfg['Agent']['port']),
@@ -111,23 +105,22 @@ class WrapperApiConfig(AppConfig):
                     cfg['Schema']['version']))))
                 assert schema
 
-        elif role in ('sri', 'the-org-book', 'bc-registrar'):
-            logging.debug("check {} 1".format(role))
+        elif role in ('sri', 'org-book', 'bc-registrar'):
             # create agent via factory by role
             if role == 'sri':
                 ag = SRIAgent(
                     p,
                     cfg['Agent']['seed'],
-                    'wallet-{}'.format(role),
+                    'wallet-{}'.format(profile),
                     None,
                     cfg['Agent']['host'],
                     int(cfg['Agent']['port']),
                     base_api_url_path)
-            elif role == 'the-org-book':
+            elif role == 'org-book':
                 ag = OrgBookAgent(
                     p,
                     cfg['Agent']['seed'],
-                    'wallet-{}'.format(role),
+                    'wallet-{}'.format(profile),
                     None,
                     cfg['Agent']['host'],
                     int(cfg['Agent']['port']),
@@ -136,14 +129,14 @@ class WrapperApiConfig(AppConfig):
                 ag = BCRegistrarAgent(
                     p,
                     cfg['Agent']['seed'],
-                    'wallet-{}'.format(role),
+                    'wallet-{}'.format(profile),
                     None,
                     cfg['Agent']['host'],
                     int(cfg['Agent']['port']),
                     base_api_url_path)
 
             do(ag.open())
-            logging.debug("role {}; ag class {}".format(role, ag.__class__.__name__))
+            logging.debug("profile {}; ag class {}".format(profile, ag.__class__.__name__))
 
             trust_anchor_host = cfg['Trust Anchor']['host']
             trust_anchor_port = cfg['Trust Anchor']['port']
@@ -154,12 +147,12 @@ class WrapperApiConfig(AppConfig):
             tag_did = r.json()
             assert tag_did
 
-            logging.debug("{}; tag_did {}".format(role, tag_did))
+            logging.debug("{}; tag_did {}".format(profile, tag_did))
             # get nym: if not registered; get trust-anchor host & port, post an agent-nym-send form
             if not json.loads(do(ag.get_nym(ag.did))):
                 with open(pjoin(dirname(abspath(__file__)), 'protocol', 'agent-nym-send.json'), 'r') as proto:
                     j = proto.read()
-                logging.debug("{}; sending {}".format(role, j % (ag.did, ag.verkey)))
+                logging.debug("{}; sending {}".format(profile, j % (ag.did, ag.verkey)))
                 r = requests.post(
                     'http://{}:{}/{}/agent-nym-send'.format(trust_anchor_host, trust_anchor_port, base_api_url_path),
                     json=json.loads(j % (ag.did, ag.verkey)))
@@ -181,9 +174,8 @@ class WrapperApiConfig(AppConfig):
             if role in ('bc-registrar', 'sri'):
                 # issuer send claim def
                 do(ag.send_claim_def(schema_json))
-                logging.debug("\n== check {} 8".format(role))
 
-            if role in ('the-org-book', 'sri'):
+            if role in ('org-book'):
                 # set master secret
                 from os import getpid
                 # append pid to avoid re-using a master secret on restart of HolderProver agent; indy-sdk library 
@@ -198,4 +190,3 @@ class WrapperApiConfig(AppConfig):
 
         cache.set('agent', ag)
         atexit.register(_cleanup)
-        # signal.signal(signal.SIGINT, _handle_SIGINT)

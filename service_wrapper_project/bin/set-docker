@@ -26,7 +26,7 @@ fi
 
 if [[ -z ${PID_RUNNING} ]]
 then
-    docker run -d --ip=10.0.0.2 --net=indy_pool_network indy_pool &>/dev/null
+    docker run -d --ip="${TEST_POOL_IP:-10.0.0.2}" --net=indy_pool_network indy_pool &>/dev/null
 fi
 
 # for process exit, zero means OK

@@ -46,6 +46,7 @@ class ServiceWrapper(APIView):
         ag = cache.get('agent')
         assert ag is not None
         try:
+            logger.debug('Processing POST [{}], request body: {}'.format(req.build_absolute_uri(), req.body))
             form = json.loads(req.body.decode("utf-8"))
             rv_json = do(ag.process_post(form))
             return Response(json.loads(rv_json))  # FIXME: this only loads it to dump it: it's already json
@@ -70,6 +71,7 @@ class ServiceWrapper(APIView):
         ag = cache.get('agent')
         assert ag is not None
         try:
+            logger.debug('Processing GET [{}]'.format(req.build_absolute_uri()))
             if req.path.startswith('/{}txn'.format(PATH_PREFIX_SLASH)):
                 rv_json = do(ag.process_get_txn(int(seq_no)))
                 return Response(json.loads(rv_json))

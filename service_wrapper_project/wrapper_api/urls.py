@@ -16,10 +16,11 @@ limitations under the License.
 
 from django.conf.urls import url, include
 from wrapper_api import views
+from .apps import PATH_PREFIX_SLASH
 
 
 urlpatterns = [
-    url(r'^{}'.format(views.PATH_PREFIX_SLASH), include([
+    url(r'^{}'.format(PATH_PREFIX_SLASH), include([
         url(r'^txn/(?P<seq_no>\d+)', views.ServiceWrapper.as_view()),
         url(r'^did', views.ServiceWrapper.as_view()),
 

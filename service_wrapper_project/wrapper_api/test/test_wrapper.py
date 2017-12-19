@@ -168,17 +168,21 @@ async def test_wrapper(pool_ip):
     for agent_profile in agent_profiles:
         service_wrapper[agent_profile] = Wrapper(agent_profile, cfg[agent_profile]['Agent'])
         started = service_wrapper[agent_profile].start()
-        print('\n\n== 2.{} == {} wrapper: {}'.format(
+        print('\n\n== 2.{} == {} wrapper: {} on {}:{}'.format(
             agent_profiles.index(agent_profile),
             'started' if started else 'using running',
-            agent_profile))
+            agent_profile,
+            cfg[agent_profile]['Agent']['host'],
+            cfg[agent_profile]['Agent']['port']))
     atexit.register(shutdown, service_wrapper)
 
     # 2. ensure all demo agents (wrappers) are up
     did = {}
     for agent_profile in agent_profiles:
         url = url_for(cfg[agent_profile]['Agent'], 'did')
+        # print('\n... url {}'.format(url))
         r = requests.get(url)
+        # print('\n... done req\n')
         assert r.status_code == 200
         did[agent_profile] = r.json()
     # trust-anchor: V4SGRU86Z58d6TV7PBUe6f
@@ -215,6 +219,7 @@ async def test_wrapper(pool_ip):
     # 5. BC Registrar (as Issuer) sends claim-hello, then creates claims and stores at BC Org Book (as HolderProver)
     claim_hello_json = form_json('claim-hello', (did['bc-registrar'],), did['bc-org-book'])
     url = url_for(cfg['bc-registrar']['Agent'], 'claim-hello')
+    # print('\n\n== XX == attempt to POST to url {}: {}'.format(url, ppjson(claim_hello_json)))
     r = requests.post(url, json=json.loads(claim_hello_json))
     assert r.status_code == 200
     claim_req = r.json()
@@ -365,12 +370,14 @@ async def test_wrapper(pool_ip):
     sri_claim = revealed_attrs(proof_resp['proof'])
     yyyy_mm_dd = datetime.date.today().strftime('%Y-%m-%d')
     sri_claim['sriRegDate'] = yyyy_mm_dd
+    print('\n\n== 12 == revealed attributes from proof, augmented with SRI data: {}'.format(ppjson(sri_claim)))
 
     sri_claim_create_json = form_json('claim-create', (json.dumps(sri_claim_req), json.dumps(sri_claim)))
     url = url_for(cfg['sri']['Agent'], 'claim-create')
     r = requests.post(url, json=json.loads(sri_claim_create_json))
     assert r.status_code == 200
     sri_claim = r.json()
+    print('\n\n== 13 == SRI claim as returned from claim-create: {}'.format(ppjson(sri_claim)))
     assert sri_claim
 
     sri_claim_store_json = form_json('claim-store', (json.dumps(sri_claim),), did['pspc-org-book'])
@@ -385,7 +392,7 @@ async def test_wrapper(pool_ip):
     r = requests.post(url, json=json.loads(sri_claim_req_all_json))
     assert r.status_code == 200
     sri_claims_all = r.json()
-    print('\n== 12 == SRI claims-all: {}'.format(ppjson(sri_claims_all)))
+    print('\n== 14 == SRI claims-all: {}'.format(ppjson(sri_claims_all)))
     assert sri_claims_all
 
     # 13. PSPC Org Book (as HolderProver) creates proof (by claim-uuid)
@@ -410,7 +417,7 @@ async def test_wrapper(pool_ip):
     r = requests.post(url, json=json.loads(sri_verification_req_json))
     assert r.status_code == 200
     sri_verification_resp = r.json()
-    print('\n== 13 == the SRI proof (by claim-uuid={}) verifies as {}'.format(
+    print('\n== 15 == the SRI proof (by claim-uuid={}) verifies as {}'.format(
         sri_claim_uuid,
         ppjson(sri_verification_resp)))
     assert sri_verification_resp
@@ -420,11 +427,11 @@ async def test_wrapper(pool_ip):
     r = requests.get(url)
     assert r.status_code == 200
     assert r.json()
-    print('\n== 14 == ledger transaction by seq no {}: {}'.format(schema['seqNo'], ppjson(r.json())))
+    print('\n== 16 == ledger transaction by seq no {}: {}'.format(schema['seqNo'], ppjson(r.json())))
     
     # 16. txn# non-existence case
     url = url_for(cfg['sri']['Agent'], 'txn/99999')
     r = requests.get(url)  # ought not exist
     assert r.status_code == 200
-    print('\n== 15 == txn #99999: {}'.format(ppjson(r.json())))
+    print('\n== 17 == txn #99999: {}'.format(ppjson(r.json())))
     assert not r.json() 

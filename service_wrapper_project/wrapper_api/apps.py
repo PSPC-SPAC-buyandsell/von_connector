@@ -35,7 +35,7 @@ PATH_PREFIX_SLASH='api/v0/'
 LOG_FORMAT='%(levelname)-8s | %(name)-12s | %(message)s'
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 logging.getLogger('asyncio').setLevel(logging.ERROR)
-logging.getLogger('von_agent').setLevel(logging.ERROR)
+logging.getLogger('von_agent').setLevel(logging.DEBUG)
 logging.getLogger('indy').setLevel(logging.ERROR)
 logging.getLogger('requests').setLevel(logging.ERROR)
 logging.getLogger('urllib3').setLevel(logging.CRITICAL)

@@ -65,7 +65,7 @@ class Wrapper:
                 pexpect.EOF,
                 pexpect.TIMEOUT
             ],
-            timeout=180)
+            timeout=240)
         if rc == 1:
             raise ValueError('Service wrapper for {} error: {}'.format(
                 self._agent_profile,
@@ -125,7 +125,7 @@ def form_json(msg_type, args, proxy_did=None):
         msg = json.loads(msg_json)
         msg['data']['proxy-did'] = proxy_did
         rv = json.dumps(msg, indent=4)
-    # print('... composed {} form: {}'.format(msg_type, ppjson(rv)))
+    # print('... form_json composed {} form: {}'.format(msg_type, ppjson(rv)))
     return rv
 
 
@@ -328,7 +328,7 @@ async def test_wrapper(pool_ip):
     assert verification_resp
 
     # 9. BC Org Book (as HolderProver) creates proof and responds to request for proof (by claim-uuid)
-    proof_req_json_by_uuid = form_json('proof-request-by-claim-uuid', (json.dumps(claim_uuid),), did['bc-org-book'])
+    proof_req_json_by_uuid = form_json('proof-request-by-claim-uuid', (claim_uuid,), did['bc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'proof-request-by-claim-uuid')
     r = requests.post(url, json=json.loads(proof_req_json_by_uuid))
     assert r.status_code == 200
@@ -337,7 +337,7 @@ async def test_wrapper(pool_ip):
 
     proof_req_json_by_non_uuid = form_json(
         'proof-request-by-claim-uuid',
-        (json.dumps('claim::ffffffff-ffff-ffff-ffff-ffffffffffff'),),
+        ('claim::ffffffff-ffff-ffff-ffff-ffffffffffff',),
         did['bc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'proof-request-by-claim-uuid')
     r = requests.post(url, json=json.loads(proof_req_json_by_non_uuid))
@@ -394,7 +394,7 @@ async def test_wrapper(pool_ip):
     sri_claim_uuid = set([*sri_display]).pop()
     sri_proof_req_json_by_uuid = form_json(
         'proof-request-by-claim-uuid',
-        (json.dumps(sri_claim_uuid),),
+        (sri_claim_uuid,),
         did['pspc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'proof-request-by-claim-uuid')
     r = requests.post(url, json=json.loads(sri_proof_req_json_by_uuid))

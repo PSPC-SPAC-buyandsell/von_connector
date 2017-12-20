@@ -265,7 +265,7 @@ async def test_wrapper(pool_ip):
         claim = r.json()
         assert claim
 
-        print('\n\n== 4 == claim: {}'.format(ppjson(claim)))
+        print('\n\n== 4.{} == claim: {}'.format(claims.index(c), ppjson(claim)))
         claim_store_json = form_json(
             'claim-store',
             (json.dumps(claim),),
@@ -301,9 +301,9 @@ async def test_wrapper(pool_ip):
     claims_prefilt = r.json()
     assert claims_prefilt
 
-    print('\n== 8 == claims by attr, with filter a priori {}'.format(ppjson(claims_prefilt)))
+    print('\n\n== 8 == claims by attr, with filter a priori {}'.format(ppjson(claims_prefilt)))
     display_pruned_prefilt = claims_for(claims_prefilt['claims'])
-    print('\n== 9 == display claims filtered a priori matching {}: {}'.format(
+    print('\n\n== 9 == display claims filtered a priori matching {}: {}'.format(
         claims[2]['LegalName'],
         ppjson(display_pruned_prefilt)))
     assert set([*display_pruned_postfilt]) == set([*display_pruned_prefilt])
@@ -319,6 +319,7 @@ async def test_wrapper(pool_ip):
     r = requests.post(url, json=json.loads(proof_req_json))
     assert r.status_code == 200
     proof_resp = r.json()
+    print('\n\n== 10 == proof (req by filter): {}'.format(ppjson(proof_resp)))
     assert proof_resp
 
     # 8. SRI Agent (as Verifier) verifies proof (by filter)
@@ -329,7 +330,7 @@ async def test_wrapper(pool_ip):
     r = requests.post(url, json=json.loads(verification_req_json))
     assert r.status_code == 200
     verification_resp = r.json()
-    print('\n== 10 == the proof (by filter) verifies as {}'.format(ppjson(verification_resp)))
+    print('\n\n== 11 == the proof (by filter) verifies as {}'.format(ppjson(verification_resp)))
     assert verification_resp
 
     # 9. BC Org Book (as HolderProver) creates proof and responds to request for proof (by claim-uuid)
@@ -356,7 +357,7 @@ async def test_wrapper(pool_ip):
     r = requests.post(url, json=json.loads(verification_req_json))
     assert r.status_code == 200
     verification_resp = r.json()
-    print('\n== 11 == the proof (by claim-uuid={}) verifies as {}'.format(claim_uuid, ppjson(verification_resp)))
+    print('\n\n== 12 == the proof (by claim-uuid={}) verifies as {}'.format(claim_uuid, ppjson(verification_resp)))
     assert verification_resp
 
     # 11. SRI agent (as Issuer) creates SRI reg completion claim from proof, stores at PSPC Org Book (as HolderProver)
@@ -370,14 +371,14 @@ async def test_wrapper(pool_ip):
     sri_claim = revealed_attrs(proof_resp['proof'])
     yyyy_mm_dd = datetime.date.today().strftime('%Y-%m-%d')
     sri_claim['sriRegDate'] = yyyy_mm_dd
-    print('\n\n== 12 == revealed attributes from proof, augmented with SRI data: {}'.format(ppjson(sri_claim)))
+    print('\n\n== 13 == revealed attributes from proof, augmented with SRI data: {}'.format(ppjson(sri_claim)))
 
     sri_claim_create_json = form_json('claim-create', (json.dumps(sri_claim_req), json.dumps(sri_claim)))
     url = url_for(cfg['sri']['Agent'], 'claim-create')
     r = requests.post(url, json=json.loads(sri_claim_create_json))
     assert r.status_code == 200
     sri_claim = r.json()
-    print('\n\n== 13 == SRI claim as returned from claim-create: {}'.format(ppjson(sri_claim)))
+    print('\n\n== 14 == SRI claim as returned from claim-create: {}'.format(ppjson(sri_claim)))
     assert sri_claim
 
     sri_claim_store_json = form_json('claim-store', (json.dumps(sri_claim),), did['pspc-org-book'])
@@ -392,7 +393,7 @@ async def test_wrapper(pool_ip):
     r = requests.post(url, json=json.loads(sri_claim_req_all_json))
     assert r.status_code == 200
     sri_claims_all = r.json()
-    print('\n== 14 == SRI claims-all: {}'.format(ppjson(sri_claims_all)))
+    print('\n\n== 15 == SRI claims-all: {}'.format(ppjson(sri_claims_all)))
     assert sri_claims_all
 
     # 13. PSPC Org Book (as HolderProver) creates proof (by claim-uuid)
@@ -417,7 +418,7 @@ async def test_wrapper(pool_ip):
     r = requests.post(url, json=json.loads(sri_verification_req_json))
     assert r.status_code == 200
     sri_verification_resp = r.json()
-    print('\n== 15 == the SRI proof (by claim-uuid={}) verifies as {}'.format(
+    print('\n\n== 16 == the SRI proof (by claim-uuid={}) verifies as {}'.format(
         sri_claim_uuid,
         ppjson(sri_verification_resp)))
     assert sri_verification_resp
@@ -427,11 +428,11 @@ async def test_wrapper(pool_ip):
     r = requests.get(url)
     assert r.status_code == 200
     assert r.json()
-    print('\n== 16 == ledger transaction by seq no {}: {}'.format(schema['seqNo'], ppjson(r.json())))
+    print('\n\n== 17 == ledger transaction by seq no {}: {}'.format(schema['seqNo'], ppjson(r.json())))
     
     # 16. txn# non-existence case
     url = url_for(cfg['sri']['Agent'], 'txn/99999')
     r = requests.get(url)  # ought not exist
     assert r.status_code == 200
-    print('\n== 17 == txn #99999: {}'.format(ppjson(r.json())))
+    print('\n\n== 18 == txn #99999: {}'.format(ppjson(r.json())))
     assert not r.json() 

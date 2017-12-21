@@ -275,7 +275,7 @@ async def test_wrapper(pool_ip):
         assert r.status_code == 200
         # response is empty
 
-    # 6. BC Org Book (as HolderProver) finds claims
+    # 6. SRI agent proxies to BC Org Book (as HolderProver) to find claims
     claim_req_all_json = form_json('claim-request', (json.dumps({}),), did['bc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'claim-request')
     r = requests.post(url, json=json.loads(claim_req_all_json))

@@ -18,7 +18,9 @@ from configparser import ConfigParser
 from django.conf import settings
 from django.core.cache import cache
 from os.path import abspath, dirname, isfile, join as pjoin
-from os import environ
+from os import environ, makedirs
+
+import logging
 
 
 _inis = [
@@ -26,7 +28,24 @@ _inis = [
     pjoin(dirname(abspath(__file__)), 'config', 'agent-profile', environ.get('AGENT_PROFILE') + '.ini')
 ]
 
+
+def init_logging():
+    dir_log = pjoin(dirname(abspath(__file__)), 'log')
+    makedirs(dir_log, exist_ok=True)
+    path_log = pjoin(dir_log, environ.get('AGENT_PROFILE') + '.log')
+
+    LOG_FORMAT='%(asctime)-15s | %(levelname)-8s | %(name)-12s | %(message)s'
+    logging.basicConfig(filename=path_log, level=logging.INFO, format=LOG_FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
+    logging.getLogger('asyncio').setLevel(logging.ERROR)
+    logging.getLogger('von_agent').setLevel(logging.DEBUG)
+    logging.getLogger('indy').setLevel(logging.ERROR)
+    logging.getLogger('requests').setLevel(logging.ERROR)
+    logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+
+
 def init_config():
+    init_logging()
+
     global _inis
     if cache.get('config') == None:
         if all(isfile(ini) for ini in _inis):

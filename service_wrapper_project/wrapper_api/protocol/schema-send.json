@@ -11,7 +11,7 @@
             "busId",
             "orgTypeId",
             "jurisdictionId",
-            "LegalName",
+            "legalName",
             "effectiveDate",
             "effectiveDate",
             "endDate",

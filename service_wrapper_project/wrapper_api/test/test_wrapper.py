@@ -231,7 +231,7 @@ async def test_wrapper(pool_ip):
             'busId': 11121398,
             'orgTypeId': 2,
             'jurisdictionId': 1,
-            'LegalName': 'The Original House of Pies',
+            'legalName': 'The Original House of Pies',
             'effectiveDate': '2010-10-10',
             'endDate': None,
             'sriRegDate': None
@@ -241,7 +241,7 @@ async def test_wrapper(pool_ip):
             'busId': 11133333,
             'orgTypeId': 1,
             'jurisdictionId': 1,
-            'LegalName': 'Planet Cake',
+            'legalName': 'Planet Cake',
             'effectiveDate': '2011-10-01',
             'endDate': None,
             'sriRegDate': None
@@ -251,7 +251,7 @@ async def test_wrapper(pool_ip):
             'busId': 11144444,
             'orgTypeId': 2,
             'jurisdictionId': 1,
-            'LegalName': 'Tart City',
+            'legalName': 'Tart City',
             'effectiveDate': '2012-12-01',
             'endDate': None,
             'sriRegDate': None
@@ -284,9 +284,9 @@ async def test_wrapper(pool_ip):
     assert claims_all
     print('\n\n== 5 == claims by attr, no filter, api-post {}'.format(ppjson(claims_all)))
 
-    display_pruned_postfilt = claims_for(claims_all['claims'], {'LegalName': claims[2]['LegalName']})
+    display_pruned_postfilt = claims_for(claims_all['claims'], {'legalName': claims[2]['legalName']})
     print('\n\n== 6 == display claims filtered post-hoc matching {}: {}'.format(
-        claims[2]['LegalName'],
+        claims[2]['legalName'],
         ppjson(display_pruned_postfilt)))
     display_pruned = prune_claims_json({k for k in display_pruned_postfilt}, claims_all['claims'])
     print('\n\n== 7 == stripped down {}'.format(ppjson(display_pruned)))
@@ -304,7 +304,7 @@ async def test_wrapper(pool_ip):
     print('\n\n== 8 == claims by attr, with filter a priori {}'.format(ppjson(claims_prefilt)))
     display_pruned_prefilt = claims_for(claims_prefilt['claims'])
     print('\n\n== 9 == display claims filtered a priori matching {}: {}'.format(
-        claims[2]['LegalName'],
+        claims[2]['legalName'],
         ppjson(display_pruned_prefilt)))
     assert set([*display_pruned_postfilt]) == set([*display_pruned_prefilt])
     assert len(display_pruned_postfilt) == 1

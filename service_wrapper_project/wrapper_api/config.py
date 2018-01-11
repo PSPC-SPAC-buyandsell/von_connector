@@ -37,7 +37,8 @@ def init_logging():
     LOG_FORMAT='%(asctime)-15s | %(levelname)-8s | %(name)-12s | %(message)s'
     logging.basicConfig(filename=path_log, level=logging.INFO, format=LOG_FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
     logging.getLogger('asyncio').setLevel(logging.ERROR)
-    logging.getLogger('von_agent').setLevel(logging.DEBUG)
+    logging.getLogger('wrapper_api').setLevel(logging.INFO)
+    logging.getLogger('von_agent').setLevel(logging.INFO)
     logging.getLogger('indy').setLevel(logging.ERROR)
     logging.getLogger('requests').setLevel(logging.ERROR)
     logging.getLogger('urllib3').setLevel(logging.CRITICAL)

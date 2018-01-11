@@ -1,0 +1,9 @@
+[
+    "id",
+    "busId",
+    "orgTypeId",
+    "jurisdictionId",
+    "legalName",
+    "effectiveDate",
+    "endDate"
+]

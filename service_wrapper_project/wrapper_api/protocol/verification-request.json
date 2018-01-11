@@ -1,6 +1,11 @@
 {
     "type": "verification-request",
     "data": {
+        "schema": {
+            "origin-did": "%s",
+            "name": "%s",
+            "version": "%s"
+        },
         "proof-req": %s,
         "proof": %s
     }

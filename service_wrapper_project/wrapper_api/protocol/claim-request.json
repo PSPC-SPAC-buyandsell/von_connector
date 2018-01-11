@@ -1,6 +1,11 @@
 {
     "type": "claim-request",
     "data": {
+        "schema": {
+            "origin-did": "%s",
+            "name": "%s",
+            "version": "%s"
+        },
         "claim-filter": {
             "attr-match": %s,
             "predicate-match": [

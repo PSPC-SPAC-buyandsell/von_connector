@@ -1,5 +1,10 @@
 {
     "type": "claim-def-send",
     "data": {
+        "schema": {
+            "origin-did": "%s",
+            "name": "%s",
+            "version": "%s"
+        }
     }
 }

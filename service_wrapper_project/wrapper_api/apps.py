@@ -19,6 +19,7 @@ from django.core.cache import cache
 from os.path import abspath, dirname, join as pjoin
 from os import environ
 from von_agent.nodepool import NodePool
+from von_agent.agents import Issuer
 from von_agent.demo_agents import TrustAnchorAgent, SRIAgent, BCRegistrarAgent, OrgBookAgent
 from wrapper_api.config import init_config
 from wrapper_api.eventloop import do
@@ -44,6 +45,52 @@ def _cleanup():
 
 class WrapperApiConfig(AppConfig):
     name = 'wrapper_api'
+
+    def originate(ag, cfg):
+        """
+        Send schemata that configuration identifies agent as originating, send claim definition if agent is an Issuer.
+
+        :param ag: agent object
+        :param cfg_agent: configuration dict
+        """
+        # note that for our demo, all issuers originate exactly the schemata on which they make claim definitions
+
+        logger = logging.getLogger(__name__)
+
+        if 'Origin' not in cfg:
+            return
+        for schema_name in cfg['Origin']:
+            for schema_version in (v.strip() for v in cfg['Origin'][schema_name].split(',')):
+                j = None
+                attrs_json = None
+                with open(pjoin(dirname(abspath(__file__)), 'protocol', 'schema-lookup.json'), 'r') as proto_f:
+                    j = proto_f.read()
+
+                schema_json = do(ag.process_post(json.loads(j % (ag.did, schema_name, schema_version))))
+
+                if not json.loads(schema_json):
+                    with open(pjoin(dirname(abspath(__file__)), 'protocol', 'schema-send.json'), 'r') as proto_f:
+                        j = proto_f.read()
+                    with open(pjoin(
+                            dirname(abspath(__file__)),
+                            'protocol',
+                            'schema-send',
+                            schema_name,
+                            schema_version,
+                            'attr-names.json'), 'r') as attr_names_f:
+                        attrs_json = attr_names_f.read()
+                    schema_json = do(ag.process_post(json.loads(j % (
+                        ag.did,
+                        schema_name,
+                        schema_version,
+                        json.dumps(json.loads(attrs_json))))))
+                    logger.info('Originated schema {} version {}'.format(schema_name, schema_version))
+
+                assert schema_json
+
+                if isinstance(ag, Issuer):
+                    do(ag.send_claim_def(schema_json))
+
 
     def ready(self):
         logger = logging.getLogger(__name__)
@@ -82,20 +129,8 @@ class WrapperApiConfig(AppConfig):
             if not json.loads(do(ag.get_endpoint(ag.did))):
                 do(ag.send_endpoint())
 
-            # send schema if need be, seeding schema cache en passant
-            with open(pjoin(dirname(abspath(__file__)), 'protocol', 'schema-lookup.json'), 'r') as proto:
-                j = proto.read()
-            if not json.loads(do(ag.process_post(json.loads(j % (
-                    ag.did,
-                    cfg['Schema']['name'],
-                    cfg['Schema']['version']))))):
-                with open(pjoin(dirname(abspath(__file__)), 'protocol', 'schema-send.json'), 'r') as proto:
-                    j = proto.read()
-                schema = do(ag.process_post(json.loads(j % (
-                    ag.did,
-                    cfg['Schema']['name'],
-                    cfg['Schema']['version']))))
-                assert schema
+            # originate schemata if need be
+            WrapperApiConfig.originate(ag, cfg)
 
         elif role in ('sri', 'org-book', 'bc-registrar'):
             # create agent via factory by role
@@ -154,18 +189,9 @@ class WrapperApiConfig(AppConfig):
             if not json.loads(do(ag.get_endpoint(ag.did))):
                 do(ag.send_endpoint())
 
-            # Post a schema_lookup, seeding schema cache and obviating need to specify schema in POST messages
-            with open(pjoin(dirname(abspath(__file__)), 'protocol', 'schema-lookup.json'), 'r') as proto:
-                j = proto.read()
-            schema_json = do(ag.process_post(json.loads(j % (
-                tag_did,
-                cfg['Schema']['name'],
-                cfg['Schema']['version']))))
-            assert json.loads(schema_json)
-
             if role in ('bc-registrar', 'sri'):
-                # issuer send claim def
-                do(ag.send_claim_def(schema_json))
+                # originate schemata if need be
+                WrapperApiConfig.originate(ag, cfg)
 
             if role in ('org-book'):
                 # set master secret
@@ -178,7 +204,6 @@ class WrapperApiConfig(AppConfig):
             raise ValueError('Unsupported agent role [{}]'.format(role))
 
         assert ag is not None
-        assert ag._schema_cache
 
         cache.set('agent', ag)
         atexit.register(_cleanup)

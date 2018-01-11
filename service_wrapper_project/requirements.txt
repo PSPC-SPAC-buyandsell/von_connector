@@ -6,4 +6,4 @@ djangorestframework==3.6.4
 six>=1.11.0
 pexpect>=4.3.0
 python3-indy==1.1.1-dev-291
-von_agent==0.0.3
+von_agent==0.0.4

@@ -1,11 +1,8 @@
 {
     "type": "proof-request-by-claim-uuid",
     "data": {
-        "schema": {
-            "origin-did": "%s",
-            "name": "%s",
-            "version": "%s"
-        },
-        "claim-uuid": "%s"
+        "schemata": %s,
+        "claim-uuids": %s,
+        "requested-attrs": %s
     }
 }

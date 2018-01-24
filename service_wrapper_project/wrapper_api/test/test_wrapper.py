@@ -14,12 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+from collections import Counter
 from configparser import ConfigParser
 from contextlib import closing
 from os import walk
 from os.path import abspath, dirname, isfile, join as pjoin
 from time import sleep
-from von_agent.util import ppjson, claims_for, encode, prune_claims_json, revealed_attrs
+from von_agent.util import ppjson, claims_for, encode, prune_claims_json, revealed_attrs, schema_seq_nos_for
+from von_agent.proto_util import list_schemata, attr_match, req_attrs
+from von_agent.schema import SchemaKey, SchemaStore
 
 import atexit
 import datetime
@@ -147,13 +150,11 @@ def claim_req_for(schema, claim_req, claim):
     return None
 
 
-def schema_key_values_for(schema, claim):
-    # walk the schemata to find and return first (origin did, name, version) matching input claim
-    for origin_ag in schema:
-        for name in schema[origin_ag]:
-            for version in schema[origin_ag][name]:
-                if set([*claim]).issubset(schema[origin_ag][name][version]['data']['attr_names']):
-                    return (schema[origin_ag][name][version]['data']['origin'], name, version)
+def schema_key_for(schema_store, claim_data):
+    # walk the schema store to find and return the first schema key matching input claim data attributes
+    for s_key in schema_store.index().values():
+        if set([*claim_data]).issubset(schema_store[s_key]['data']['attr_names']):
+            return s_key
     return None
 
 
@@ -203,45 +204,58 @@ async def test_wrapper(pool_ip):
     atexit.register(shutdown, service_wrapper)
 
     # 2. ensure all demo agents (wrappers) are up
-    did = {}
+    agent_profile2did = {}
     for agent_profile in agent_profiles:
         url = url_for(cfg[agent_profile]['Agent'], 'did')
         # print('\n... url {}'.format(url))
         r = requests.get(url)
         # print('\n... done req\n')
         assert r.status_code == 200
-        did[agent_profile] = r.json()
+        agent_profile2did[agent_profile] = r.json()
     # trust-anchor: V4SGRU86Z58d6TV7PBUe6f
     # sri: FaBAq1W5QTVDpAZtep6h19
     # bc-org-book: Rzra4McufsSNUQ1mGyWc2w
     # pspc-org-book: 45UePtKtVrZ6UycN9gmMsG
     # bc-registrar: Q4zqM7aXqm7gDQkUVLng9h
-    print('\n\n== 3 == DIDs: {}'.format(ppjson(did)))
+    print('\n\n== 3 == DIDs: {}'.format(ppjson(agent_profile2did)))
+
+    S_KEY = {
+        'BC': SchemaKey(agent_profile2did['bc-registrar'], 'bc-reg', '1.0'),
+        'SRI-1.0': SchemaKey(agent_profile2did['sri'], 'sri', '1.0'),
+        'SRI-1.1': SchemaKey(agent_profile2did['sri'], 'sri', '1.1'),
+        'GREEN': SchemaKey(agent_profile2did['sri'], 'green', '1.0'),
+    }
+    schema_key2issuer_agent_profile = {
+        S_KEY['BC']: 'bc-registrar',
+        S_KEY['SRI-1.0']: 'sri',
+        S_KEY['SRI-1.1']: 'sri',
+        S_KEY['GREEN']: 'sri'
+    }
+    claim = {}
 
     # 3. get schemata
-    schema = {}
+    schema_store = SchemaStore()
+
+    i = 0
     for ag in agent_profiles:
         if 'Origin' not in cfg[ag]:
             continue
-        if ag not in schema:
-            schema[ag] = {}
         for name in cfg[ag]['Origin']:  # read each schema once - each schema has one originator
-            if name not in schema[ag]:
-                schema[ag][name] = {}
             for version in (v.strip() for v in cfg[ag]['Origin'][name].split(',')):
+                s_key = SchemaKey(agent_profile2did[ag], name, version)
                 schema_lookup_json = form_json(
                     'schema-lookup',
                     (
-                        did[ag],
+                        agent_profile2did[ag],
                         name,
                         version
                     ))
-
                 url = url_for(cfg[ag]['Agent'], 'schema-lookup')
                 r = requests.post(url, json=json.loads(schema_lookup_json))
                 assert r.status_code == 200
-                schema[ag][name][version] = r.json()
-    print('\n\n== 4 == Schemata: {}'.format(ppjson(schema)))
+                schema_store[s_key] = r.json()
+                print('\n\n== 4.{} == Schema [{}]: {}'.format(i, s_key, ppjson(schema_store[s_key])))
+                i += 1
 
     # 4. BC Org Book, PSPC Org Book (as HolderProvers) respond to claims-reset directive, to restore state to base line
     claims_reset_json = form_json(
@@ -256,111 +270,133 @@ async def test_wrapper(pool_ip):
 
     # 5. Issuers send claim-hello to HolderProvers
     claim_req = {}
-    for origin_ag in schema:
-        if origin_ag not in claim_req:
-            claim_req[origin_ag] = {}
-        for name in schema[origin_ag]:
-            if name not in claim_req[origin_ag]:
-                claim_req[origin_ag][name] = {}
-            for version in schema[origin_ag][name]:
-                claim_hello_json = form_json(
-                    'claim-hello',
-                    (did[origin_ag], did[origin_ag], name, version),
-                    did['bc-org-book'] if origin_ag == 'bc-registrar' else did['pspc-org-book'])
-                url = url_for(
-                    cfg['bc-registrar']['Agent'] if origin_ag == 'bc-registrar' else cfg['sri']['Agent'],
-                    'claim-hello')
+    i = 0
+    for s_key in schema_store.index().values():
+        claim_hello_json = form_json(
+            'claim-hello',
+            (*s_key, s_key.origin),
+            agent_profile2did['bc-org-book']
+                if s_key.origin == agent_profile2did['bc-registrar']
+                else agent_profile2did['pspc-org-book'])
+        url = url_for(
+            cfg['bc-registrar']['Agent']
+                if s_key.origin == agent_profile2did['bc-registrar']
+                else cfg['sri']['Agent'],
+            'claim-hello')
 
-                # print('\n\n== XX == attempt to POST to url {}: {}'.format(url, ppjson(claim_hello_json)))
-                r = requests.post(url, json=json.loads(claim_hello_json))
-                assert r.status_code == 200
-                claim_req[origin_ag][name][version] = r.json()
-                assert claim_req[origin_ag][name][version]
-    print('\n\n== 5 == Claim requests: {}'.format(ppjson(claim_req)))
+        r = requests.post(url, json=json.loads(claim_hello_json))
+        assert r.status_code == 200
+        claim_req[s_key] = r.json()  # requests already json-decodes for us
+        assert claim_req[s_key]
+        print('\n\n== 5.{} == Claim request {}: {}'.format(i, s_key, ppjson(claim_req[s_key])))
+        i += 1
 
     # 6. BC Registrar creates claims and stores at BC Org Book (as HolderProver)
-    bc_claims = [
-        {
-            'id': 1,
-            'busId': 11121398,
-            'orgTypeId': 2,
-            'jurisdictionId': 1,
-            'legalName': 'The Original House of Pies',
-            'effectiveDate': '2010-10-10',
-            'endDate': None
-        },
-        {
-            'id': 2,
-            'busId': 11133333,
-            'orgTypeId': 1,
-            'jurisdictionId': 1,
-            'legalName': 'Planet Cake',
-            'effectiveDate': '2011-10-01',
-            'endDate': None
-        },
-        {
-            'id': 3,
-            'busId': 11144444,
-            'orgTypeId': 2,
-            'jurisdictionId': 1,
-            'legalName': 'Tart City',
-            'effectiveDate': '2012-12-01',
-            'endDate': None
-        }
-    ]
-    for c in bc_claims:
-        bc_claim_create_json = form_json(
-            'claim-create',
-            (json.dumps(claim_req_for(schema, claim_req, c)),
-            json.dumps(c)))
-        url = url_for(cfg['bc-registrar']['Agent'], 'claim-create')
-        r = requests.post(url, json=json.loads(bc_claim_create_json))
-        assert r.status_code == 200
-        bc_claim = r.json()
-        assert bc_claim
+    claim_data = {
+        S_KEY['BC']: [
+            {
+                'id': '1',
+                'busId': '11121398',
+                'orgTypeId': '2',
+                'jurisdictionId': '1',
+                'legalName': 'The Original House of Pies',
+                'effectiveDate': '2010-10-10',
+                'endDate': None
+            },
+            {
+                'id': '2',
+                'busId': '11133333',
+                'orgTypeId': '1',
+                'jurisdictionId': '1',
+                'legalName': 'Planet Cake',
+                'effectiveDate': '2011-10-01',
+                'endDate': None
+            },
+            {
+                'id': '3',
+                'busId': '11144444',
+                'orgTypeId': '2',
+                'jurisdictionId': '1',
+                'legalName': 'Tart City',
+                'effectiveDate': '2012-12-01',
+                'endDate': None
+            }
+        ],
+        S_KEY['SRI-1.0']: [],
+        S_KEY['SRI-1.1']: [],
+        S_KEY['GREEN']: []
+    }
+    i = 0
+    for s_key in claim_data:
+        for c in claim_data[s_key]:
+            claim_create_json = form_json(
+                'claim-create',
+                (json.dumps(claim_req[s_key]), json.dumps(c)))
+            url = url_for(cfg[schema_key2issuer_agent_profile[s_key]]['Agent'], 'claim-create')
+            r = requests.post(url, json=json.loads(claim_create_json))
+            assert r.status_code == 200
+            claim[s_key] = r.json()
+            assert claim[s_key]
 
-        print('\n\n== 6.{} == BC claim: {}'.format(bc_claims.index(c), ppjson(bc_claim)))
-        bc_claim_store_json = form_json(
-            'claim-store',
-            (json.dumps(bc_claim),),
-            did['bc-org-book'])
-        url = url_for(cfg['bc-registrar']['Agent'], 'claim-store')
-        r = requests.post(url, json=json.loads(bc_claim_store_json))
-        assert r.status_code == 200
-        # response is empty
+            print('\n\n== 6.{} == BC claim: {}'.format(i, ppjson(claim[s_key])))
+            i += 1
+            claim_store_json = form_json(
+                'claim-store',
+                (json.dumps(claim[s_key]),),
+                agent_profile2did['bc-org-book'])
+            url = url_for(cfg[schema_key2issuer_agent_profile[s_key]]['Agent'], 'claim-store')
+            r = requests.post(url, json=json.loads(claim_store_json))
+            assert r.status_code == 200
+            # response is empty
 
-    # 7. SRI agent proxies to BC Org Book (as HolderProver) to find claims
-    bc_schema_key_values = schema_key_values_for(
-        schema,
-        bc_claims[2])  # for our test case, BC uses exactly one version of one schema
+    # 7. SRI agent proxies to BC Org Book (as HolderProver) to find claims; actuator filters post hoc
     bc_claim_req_all_json = form_json(
         'claim-request',
-        (
-            *bc_schema_key_values,
-            json.dumps({})
-        ),
-        did['bc-org-book'])
+        (json.dumps(list_schemata([S_KEY['BC']])), json.dumps([]), json.dumps([])),
+        agent_profile2did['bc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'claim-request')
     r = requests.post(url, json=json.loads(bc_claim_req_all_json))
     assert r.status_code == 200
     bc_claims_all = r.json()
-    print('\n\n== 7 == BC claims by attr, no filter: {}'.format(ppjson(bc_claims_all)))
+    print('\n\n== 7 == All BC claims, no filter: {}'.format(ppjson(bc_claims_all)))
     assert bc_claims_all
 
-    bc_display_pruned_postfilt = claims_for(bc_claims_all['claims'], {'legalName': bc_claims[2]['legalName']})
+    bc_display_pruned_filt_post_hoc = claims_for(
+        bc_claims_all['claims'],
+        [{
+            'schema_seq_no': schema_store[S_KEY['BC']]['seqNo'],
+            'match': {
+                'legalName': claim_data[S_KEY['BC']][2]['legalName']
+            }
+        }])
     print('\n\n== 8 == BC display claims filtered post-hoc matching {}: {}'.format(
-        bc_claims[2]['legalName'],
-        ppjson(bc_display_pruned_postfilt)))
-    bc_display_pruned = prune_claims_json({k for k in bc_display_pruned_postfilt}, bc_claims_all['claims'])
+        claim_data[S_KEY['BC']][2]['legalName'],
+        ppjson(bc_display_pruned_filt_post_hoc)))
+
+    x_json = form_json(  # exercise proof restriction to one claim per attribute
+        'proof-request',
+        (json.dumps(list_schemata([S_KEY['BC']])), json.dumps([]), json.dumps([])),
+        agent_profile2did['bc-org-book'])
+    url = url_for(cfg['sri']['Agent'], 'proof-request')
+    r = requests.post(url, json=json.loads(x_json))
+    assert r.status_code == 500
+
+    bc_display_pruned = prune_claims_json(bc_claims_all['claims'], {k for k in bc_display_pruned_filt_post_hoc})
     print('\n\n== 9 == BC claims stripped down {}'.format(ppjson(bc_display_pruned)))
 
     bc_claim_req_prefilt_json = form_json(
         'claim-request',
         (
-            *bc_schema_key_values,
-            json.dumps({k: bc_claims[2][k] for k in bc_claims[2] if k in ('jurisdictionId', 'busId')})
+            json.dumps(list_schemata([S_KEY['BC']])),
+            json.dumps([
+                attr_match(
+                    S_KEY['BC'],
+                    {k: claim_data[S_KEY['BC']][2][k] for k in claim_data[S_KEY['BC']][2]
+                        if k in ('jurisdictionId', 'busId')})
+            ]),
+            json.dumps([]),
         ),
-        did['bc-org-book'])
+        agent_profile2did['bc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'claim-request')
     r = requests.post(url, json=json.loads(bc_claim_req_prefilt_json))
     assert r.status_code == 200
@@ -370,20 +406,25 @@ async def test_wrapper(pool_ip):
     print('\n\n== 10 == BC claims by attr, filtered a priori {}'.format(ppjson(bc_claims_prefilt)))
     bc_display_pruned_prefilt = claims_for(bc_claims_prefilt['claims'])
     print('\n\n== 11 == BC display claims filtered a priori matching {}: {}'.format(
-        bc_claims[2]['legalName'],
+        claim_data[S_KEY['BC']][2]['legalName'],
         ppjson(bc_display_pruned_prefilt)))
-    assert set([*bc_display_pruned_postfilt]) == set([*bc_display_pruned_prefilt])
-    assert len(bc_display_pruned_postfilt) == 1
+    assert set([*bc_display_pruned_filt_post_hoc]) == set([*bc_display_pruned_prefilt])
+    assert len(bc_display_pruned_filt_post_hoc) == 1
 
     # 8. BC Org Book (as HolderProver) creates proof and responds to request for proof (by filter)
-    bc_claim_uuid = set([*bc_display_pruned_prefilt]).pop()
     bc_proof_req_json = form_json(
         'proof-request',
         (
-            *bc_schema_key_values,
-            json.dumps({k: bc_claims[2][k] for k in bc_claims[2] if k in ('jurisdictionId', 'busId')})
+            json.dumps(list_schemata([S_KEY['BC']])),
+            json.dumps([
+                attr_match(
+                    S_KEY['BC'],
+                    {k: claim_data[S_KEY['BC']][2][k] for k in claim_data[S_KEY['BC']][2]
+                        if k in ('jurisdictionId', 'busId')})
+            ]),
+            json.dumps([]),
         ),
-        did['bc-org-book'])
+        agent_profile2did['bc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'proof-request')
     r = requests.post(url, json=json.loads(bc_proof_req_json))
     assert r.status_code == 200
@@ -394,10 +435,7 @@ async def test_wrapper(pool_ip):
     # 9. SRI Agent (as Verifier) verifies proof (by filter)
     bc_verification_req_json = form_json(
         'verification-request',
-        (
-            *bc_schema_key_values,
-            json.dumps(bc_proof_resp['proof-req']),json.dumps(bc_proof_resp['proof'])
-        ))
+        (json.dumps(bc_proof_resp['proof-req']), json.dumps(bc_proof_resp['proof'])))
     url = url_for(cfg['sri']['Agent'], 'verification-request')
     r = requests.post(url, json=json.loads(bc_verification_req_json))
     assert r.status_code == 200
@@ -405,39 +443,40 @@ async def test_wrapper(pool_ip):
     print('\n\n== 13 == SRI agent verifies BC proof (by filter) as {}'.format(ppjson(bc_verification_resp)))
     assert bc_verification_resp
 
-    # 10. BC Org Book (as HolderProver) creates proof and responds to request for proof (by claim-uuid)
+    # 10. BC Org Book (as HolderProver) creates proof (by claim-uuid)
+    bc_claim_uuid = set([*bc_display_pruned_prefilt]).pop()
+    seq_no = set(schema_seq_nos_for(bc_claims_prefilt['claims'], {bc_claim_uuid}).values()).pop()  # it's unique
     bc_proof_req_json_by_uuid = form_json(
         'proof-request-by-claim-uuid',
         (
-            *bc_schema_key_values,
-            bc_claim_uuid
+            json.dumps(list_schemata([S_KEY['BC']])),
+            json.dumps([bc_claim_uuid]),
+            json.dumps([])
         ),
-        did['bc-org-book'])
+        agent_profile2did['bc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'proof-request-by-claim-uuid')
     r = requests.post(url, json=json.loads(bc_proof_req_json_by_uuid))
     assert r.status_code == 200
     bc_proof_resp = r.json()
     assert bc_proof_resp
 
-    bc_proof_req_json_by_non_uuid = form_json(
+    # 11. BC Org Book agent (as HolderProver)
+    bc_proof_req_json_by_non_uuid = form_json(  # exercise no such claim by claim-uuid
         'proof-request-by-claim-uuid',
         (
-            *bc_schema_key_values,
-            'claim::ffffffff-ffff-ffff-ffff-ffffffffffff'
+            json.dumps(list_schemata([S_KEY['BC']])),
+            json.dumps(['claim::ffffffff-ffff-ffff-ffff-ffffffffffff']),
+            json.dumps([])
         ),
-        did['bc-org-book'])
+        agent_profile2did['bc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'proof-request-by-claim-uuid')
     r = requests.post(url, json=json.loads(bc_proof_req_json_by_non_uuid))
     assert r.status_code == 500
 
-    # 11. SRI Agent (as Verifier) verifies proof (by uuid)
+    # 12. SRI Agent (as Verifier) verifies proof (by claim-uuid)
     sri_bc_verification_req_json = form_json(
         'verification-request',
-        (
-            *bc_schema_key_values,
-            json.dumps(bc_proof_resp['proof-req']),
-            json.dumps(bc_proof_resp['proof'])
-        ))
+        (json.dumps(bc_proof_resp['proof-req']), json.dumps(bc_proof_resp['proof'])))
     url = url_for(cfg['sri']['Agent'], 'verification-request')
     r = requests.post(url, json=json.loads(sri_bc_verification_req_json))
     assert r.status_code == 200
@@ -447,78 +486,132 @@ async def test_wrapper(pool_ip):
         ppjson(sri_bc_verification_resp)))
     assert sri_bc_verification_resp
 
-    # 12. SRI agent (as Issuer) creates SRI reg completion claim from proof, stores at PSPC Org Book (as HolderProver)
-    revealed = revealed_attrs(bc_proof_resp['proof'])
-    # print('\n\n== XX == Revealed attributes: {}'.format(ppjson(revealed)));
-    sri_schema_key_values = schema_key_values_for(schema, {'sriRegDate': None})
-    (_, sri_schema_name, sri_schema_version) = sri_schema_key_values
-    sri_claim = {k: claim_value_pair(revealed[k]) for k in revealed
-        if k in schema['sri'][sri_schema_name][sri_schema_version]['data']['attr_names']}
-    yyyy_mm_dd = datetime.date.today().strftime('%Y-%m-%d')
-    sri_claim['sriRegDate'] = claim_value_pair(yyyy_mm_dd)
-    print('\n\n== 15 == revealed attributes from proof, augmented with SRI data: {}'.format(ppjson(sri_claim)))
+    # 13. Create and store SRI registration completion claims, green claims from verified proof + extra data
+    revealed = revealed_attrs(bc_proof_resp['proof'])[bc_claim_uuid]
+    claim_data[S_KEY['SRI-1.0']].append({
+        **{k: revealed[k] for k in revealed if k in schema_store[S_KEY['SRI-1.0']]['data']['attr_names']},
+        'sriRegDate': datetime.date.today().strftime('%Y-%m-%d')
+    })
+    claim_data[S_KEY['SRI-1.1']].append({
+        **{k: revealed[k] for k in revealed if k in schema_store[S_KEY['SRI-1.1']]['data']['attr_names']},
+        'sriRegDate': datetime.date.today().strftime('%Y-%m-%d'),
+        'businessLang': 'EN-CA'
+    })
+    claim_data[S_KEY['GREEN']].append({
+        **{k: revealed[k] for k in revealed if k in schema_store[S_KEY['GREEN']]['data']['attr_names']},
+        'greenLevel': 'Silver',
+        'auditDate': datetime.date.today().strftime('%Y-%m-%d')
+    })
+    print('\n\n== 15 == all claim_data: {}'.format(
+        ppjson({str(tuple(s_key)): claim_data[s_key] for s_key in claim_data})))
 
-    sri_claim_create_json = form_json(
-        'claim-create',
-        (
-            json.dumps(claim_req_for(schema, claim_req, sri_claim)),
-            json.dumps(sri_claim)
-        ))
-    url = url_for(cfg['sri']['Agent'], 'claim-create')
-    r = requests.post(url, json=json.loads(sri_claim_create_json))
-    assert r.status_code == 200
-    sri_claim = r.json()
-    print('\n\n== 16 == SRI claim as returned from claim-create: {}'.format(ppjson(sri_claim)))
-    assert sri_claim
+    i = 0
+    for s_key in claim_data:
+        if s_key == S_KEY['BC']:
+            continue
+        for c in claim_data[s_key]:
+            claim_create_json = form_json(
+                'claim-create',
+                (
+                    json.dumps(claim_req[s_key]),
+                    json.dumps(c))
+                )
+            url = url_for(cfg[schema_key2issuer_agent_profile[s_key]]['Agent'], 'claim-create')
+            r = requests.post(url, json=json.loads(claim_create_json))
+            assert r.status_code == 200
+            claim[s_key] = r.json()
+            assert claim[s_key]
 
-    sri_claim_store_json = form_json(
-        'claim-store',
-        (
-            json.dumps(sri_claim),
-        ),
-        did['pspc-org-book'])
-    url = url_for(cfg['sri']['Agent'], 'claim-store')
-    r = requests.post(url, json=json.loads(sri_claim_store_json))
-    assert r.status_code == 200
-    # response is empty
+            print('\n\n== 16.{} == {} claim: {}'.format(i, s_key, ppjson(claim[s_key])))
+            i += 1
+            claim_store_json = form_json(
+                'claim-store',
+                (json.dumps(claim[s_key]),),
+                agent_profile2did['pspc-org-book'])
+            url = url_for(cfg[schema_key2issuer_agent_profile[s_key]]['Agent'], 'claim-store')
+            r = requests.post(url, json=json.loads(claim_store_json))
+            assert r.status_code == 200
+            # response is empty
 
-    # 13. PSPC Org Book (as HolderProver) finds claims
-    sri_claim_req_all_json = form_json(
+    # 14. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, one schema at a time
+    i = 0
+    for s_key in claim_data:
+        if s_key == S_KEY['BC']:
+            continue
+        sri_claim_req_json = form_json(
+            'claim-request',
+            (
+                json.dumps(list_schemata([s_key])),
+                json.dumps([]),
+                json.dumps([])
+            ),
+            agent_profile2did['pspc-org-book'])
+        url = url_for(cfg['sri']['Agent'], 'claim-request')
+        r = requests.post(url, json=json.loads(sri_claim_req_json))
+        assert r.status_code == 200
+        sri_claim = r.json()
+
+        print('\n\n== 17.{} == SRI claims on [{} v{}], no filter: {}'.format(
+            i,
+            s_key.name,
+            s_key.version,
+            ppjson(sri_claim)))
+        i += 1
+
+    # 15. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, for all schemata, on first attr
+    sri_claim_req_json = form_json(
         'claim-request',
         (
-            *sri_schema_key_values,
-            json.dumps({})
+            json.dumps(list_schemata([s_key for s_key in claim_data if s_key != S_KEY['BC']])),
+            json.dumps([]),
+            json.dumps([req_attrs(s_key, [schema_store[s_key]['data']['attr_names'][0]])
+                for s_key in claim_data if s_key != S_KEY['BC']])
         ),
-        did['pspc-org-book'])
+        agent_profile2did['pspc-org-book'])
     url = url_for(cfg['sri']['Agent'], 'claim-request')
-    r = requests.post(url, json=json.loads(sri_claim_req_all_json))
+    r = requests.post(url, json=json.loads(sri_claim_req_json))
+    assert r.status_code == 200
+    sri_claims_all_first_attr = r.json()
+    print('\n\n== 18 == All SRI claims at PSPC Org Book, first attr only: {}'.format(ppjson(sri_claims_all_first_attr)))
+    assert len(sri_claims_all_first_attr['claims']['attrs']) == (len(schema_store.index()) - 1)  # all except BC
+
+    # 16. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, on all schemata at once
+    sri_claim_req_json = form_json(
+        'claim-request',
+        (
+            json.dumps(list_schemata([s_key for s_key in claim_data if s_key != S_KEY['BC']])),
+            json.dumps([]),
+            json.dumps([])
+        ),
+        agent_profile2did['pspc-org-book'])
+    url = url_for(cfg['sri']['Agent'], 'claim-request')
+    r = requests.post(url, json=json.loads(sri_claim_req_json))
     assert r.status_code == 200
     sri_claims_all = r.json()
-    print('\n\n== 17 == SRI claims-all: {}'.format(ppjson(sri_claims_all)))
-    assert sri_claims_all
-
-    # 14. PSPC Org Book (as HolderProver) creates proof (by claim-uuid)
+    print('\n\n== 19 == All SRI claims at PSPC Org Book, all attrs: {}'.format(ppjson(sri_claims_all)))
     sri_display = claims_for(sri_claims_all['claims'])
-    assert len(sri_display) == 1
-    sri_claim_uuid = set([*sri_display]).pop()
-    sri_proof_req_json_by_uuid = form_json(
-        'proof-request-by-claim-uuid',
+    print('\n\n== 20 == All SRI claims at PSPC Org Book by claim-uuid: {}'.format(ppjson(sri_display)))
+
+    # 17. SRI agent proxies to PSPC Org Book agent (as HolderProver) to create (multi-claim) proof
+    sri_proof_req_json = form_json(
+        'proof-request',
         (
-            *sri_schema_key_values,
-            sri_claim_uuid
+            json.dumps(list_schemata([s_key for s_key in claim_data if s_key != S_KEY['BC']])),
+            json.dumps([]),
+            json.dumps([])
         ),
-        did['pspc-org-book'])
-    url = url_for(cfg['sri']['Agent'], 'proof-request-by-claim-uuid')
-    r = requests.post(url, json=json.loads(sri_proof_req_json_by_uuid))
+        agent_profile2did['pspc-org-book'])
+    url = url_for(cfg['sri']['Agent'], 'proof-request')
+    r = requests.post(url, json=json.loads(sri_proof_req_json))
     assert r.status_code == 200
     sri_proof_resp = r.json()
-    assert sri_proof_resp
+    print('\n\n== 21 == PSPC org book proof response on all claims: {}'.format(ppjson(sri_proof_resp)))
+    assert len(sri_proof_resp['proof']['proofs']) == len(sri_display)
 
-    # 15. SRI (as Verifier) verifies proof (by uuid)
+    # 18. SRI agent (as Verifier) verifies proof
     sri_verification_req_json = form_json(
         'verification-request',
         (
-            *sri_schema_key_values,
             json.dumps(sri_proof_resp['proof-req']),
             json.dumps(sri_proof_resp['proof'])
         ))
@@ -526,22 +619,131 @@ async def test_wrapper(pool_ip):
     r = requests.post(url, json=json.loads(sri_verification_req_json))
     assert r.status_code == 200
     sri_verification_resp = r.json()
-    print('\n\n== 18 == the SRI proof (by claim-uuid={}) verifies as {}'.format(
-        sri_claim_uuid,
+    print('\n\n== 22 == the SRI proof (by empty filter) verifies as {}'.format(
         ppjson(sri_verification_resp)))
     assert sri_verification_resp
 
-    # 16. Exercise helper GET TXN call
-    sri_schema_txn_no = schema['sri'][sri_schema_name][sri_schema_version]['seqNo']
-    url = url_for(cfg['sri']['Agent'], 'txn/{}'.format(sri_schema_txn_no))
+    # 19. SRI agent proxies to PSPC Org Book agent (as HolderProver) to createa (multi-claim) proof by claim-uuid
+    sri_proof_req_json = form_json(
+        'proof-request-by-claim-uuid',
+        (
+            json.dumps(list_schemata([s_key for s_key in claim_data if s_key != S_KEY['BC']])),
+            json.dumps([claim_uuid for claim_uuid in sri_display]),
+            json.dumps([])
+        ),
+        agent_profile2did['pspc-org-book'])
+    url = url_for(cfg['sri']['Agent'], 'proof-request-by-claim-uuid')
+    r = requests.post(url, json=json.loads(sri_proof_req_json))
+    assert r.status_code == 200
+    sri_proof_resp = r.json()
+    print('\n\n== 23 == PSPC org book proof response on claim-uuids {}: {}'.format(
+        {claim_uuid for claim_uuid in sri_display},
+        ppjson(sri_proof_resp)))
+    assert len(sri_proof_resp['proof']['proofs']) == len(sri_display)
+
+    # 20. SRI agent (as Verifier) verifies proof
+    sri_verification_req_json = form_json(
+        'verification-request',
+        (
+            json.dumps(sri_proof_resp['proof-req']),
+            json.dumps(sri_proof_resp['proof'])
+        ))
+    url = url_for(cfg['sri']['Agent'], 'verification-request')
+    r = requests.post(url, json=json.loads(sri_verification_req_json))
+    assert r.status_code == 200
+    sri_verification_resp = r.json()
+    print('\n\n== 24 == the SRI proof on claim-uuids {}  verifies as {}'.format(
+        {claim_uuid for claim_uuid in sri_display},
+        ppjson(sri_verification_resp)))
+    assert sri_verification_resp
+
+    # 21. SRI agent proxies to PSPC Org Book agent to create multi-claim proof/uuids, schemata implicit, not legalName
+    sri_proof_req_json = form_json(
+        'proof-request-by-claim-uuid',
+        (
+            json.dumps([]),
+            json.dumps([claim_uuid for claim_uuid in sri_display]),
+            json.dumps([req_attrs(s_key, [a for a in schema_store[s_key]['data']['attr_names'] if a != 'legalName'])
+                for s_key in claim_data if s_key != S_KEY['BC']])
+        ),
+        agent_profile2did['pspc-org-book'])
+    url = url_for(cfg['sri']['Agent'], 'proof-request-by-claim-uuid')
+    r = requests.post(url, json=json.loads(sri_proof_req_json))
+    assert r.status_code == 200
+    sri_proof_resp = r.json()
+    print('\n\n== 25 == PSPC org book proof response, schemata implicit, claim-uuids {}, not legalName: {}'.format(
+        {claim_uuid for claim_uuid in sri_display},
+        ppjson(sri_proof_resp)))
+    assert len(sri_proof_resp['proof']['proofs']) == len(sri_display)
+    revealed = revealed_attrs(sri_proof_resp['proof'])
+    print('\n\n== 26 == Revealed attrs for above: {}'.format(
+        {claim_uuid for claim_uuid in sri_display},
+        ppjson(revealed)))
+    assert Counter([attr for c in revealed for attr in revealed[c]]) == Counter(
+        [attr for s_key in schema_store.index().values() if s_key != S_KEY['BC']
+            for attr in schema_store[s_key]['data']['attr_names'] if attr != 'legalName'])
+
+    # 22. SRI agent (as Verifier) verifies proof
+    sri_verification_req_json = form_json(
+        'verification-request',
+        (
+            json.dumps(sri_proof_resp['proof-req']),
+            json.dumps(sri_proof_resp['proof'])
+        ))
+    url = url_for(cfg['sri']['Agent'], 'verification-request')
+    r = requests.post(url, json=json.loads(sri_verification_req_json))
+    assert r.status_code == 200
+    sri_verification_resp = r.json()
+    print('\n\n== 27 == the SRI proof on claim-uuids {}  verifies as {}'.format(
+        {claim_uuid for claim_uuid in sri_display},
+        ppjson(sri_verification_resp)))
+    assert sri_verification_resp
+
+    # 23. PSPC Org Book agent (as HolderProver) creates proof on req-attrs for all green schema attrs
+    sri_proof_req_json = form_json(
+        'proof-request',
+        (
+            json.dumps([]),
+            json.dumps([]),
+            json.dumps([req_attrs(S_KEY['GREEN'], [])])
+        ),
+        agent_profile2did['pspc-org-book'])
+    url = url_for(cfg['sri']['Agent'], 'proof-request')
+    r = requests.post(url, json=json.loads(sri_proof_req_json))
+    assert r.status_code == 200
+    sri_proof_resp = r.json()
+    print('\n\n== 28 == PSPC org book proof to green claims response: {}'.format(ppjson(sri_proof_resp)))
+    assert {sri_proof_resp['proof-req']['requested_attrs'][k]['name']
+        for k in sri_proof_resp['proof-req']['requested_attrs']} == set(    
+            schema_store[S_KEY['GREEN']]['data']['attr_names'])
+
+    # 22. SRI agent (as Verifier) verifies proof
+    sri_verification_req_json = form_json(
+        'verification-request',
+        (
+            json.dumps(sri_proof_resp['proof-req']),
+            json.dumps(sri_proof_resp['proof'])
+        ))
+    url = url_for(cfg['sri']['Agent'], 'verification-request')
+    r = requests.post(url, json=json.loads(sri_verification_req_json))
+    assert r.status_code == 200
+    sri_verification_resp = r.json()
+    print('\n\n== 29 == the SRI proof on claim-uuids {}  verifies as {}'.format(
+        {claim_uuid for claim_uuid in sri_display},
+        ppjson(sri_verification_resp)))
+    assert sri_verification_resp
+
+    # 25. Exercise helper GET TXN call
+    seq_no = {k for k in schema_store.index().keys()}.pop()  # there will a real transaction here
+    url = url_for(cfg['sri']['Agent'], 'txn/{}'.format(seq_no))
     r = requests.get(url)
     assert r.status_code == 200
     assert r.json()
-    print('\n\n== 19 == ledger transaction #{}: {}'.format(sri_schema_txn_no, ppjson(r.json())))
+    print('\n\n== 30 == ledger transaction #{}: {}'.format(seq_no, ppjson(r.json())))
     
-    # 17. txn# non-existence case
+    # 26. txn# non-existence case
     url = url_for(cfg['sri']['Agent'], 'txn/99999')
     r = requests.get(url)  # ought not exist
     assert r.status_code == 200
-    print('\n\n== 20 == txn #99999: {}'.format(ppjson(r.json())))
+    print('\n\n== 31 == txn #99999: {}'.format(ppjson(r.json())))
     assert not r.json() 

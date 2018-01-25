@@ -21,7 +21,7 @@ from os import walk
 from os.path import abspath, dirname, isfile, join as pjoin
 from time import sleep
 from von_agent.util import ppjson, claims_for, encode, prune_claims_json, revealed_attrs, schema_seq_nos_for
-from von_agent.proto_util import list_schemata, attr_match, req_attrs
+from von_agent.proto.proto_util import list_schemata, attr_match, req_attrs
 from von_agent.schema import SchemaKey, SchemaStore
 
 import atexit
@@ -274,13 +274,13 @@ async def test_wrapper(pool_ip):
     for s_key in schema_store.index().values():
         claim_hello_json = form_json(
             'claim-hello',
-            (*s_key, s_key.origin),
+            (*s_key, s_key.origin_did),
             agent_profile2did['bc-org-book']
-                if s_key.origin == agent_profile2did['bc-registrar']
+                if s_key.origin_did == agent_profile2did['bc-registrar']
                 else agent_profile2did['pspc-org-book'])
         url = url_for(
             cfg['bc-registrar']['Agent']
-                if s_key.origin == agent_profile2did['bc-registrar']
+                if s_key.origin_did == agent_profile2did['bc-registrar']
                 else cfg['sri']['Agent'],
             'claim-hello')
 

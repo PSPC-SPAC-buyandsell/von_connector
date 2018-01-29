@@ -20,7 +20,7 @@ from contextlib import closing
 from os import walk
 from os.path import abspath, dirname, isfile, join as pjoin
 from time import sleep
-from von_agent.util import ppjson, claims_for, encode, prune_claims_json, revealed_attrs, schema_seq_nos_for
+from von_agent.util import ppjson, claims_for, encode, prune_claims_json, revealed_attrs, schema_keys_for
 from von_agent.proto.proto_util import list_schemata, attr_match, req_attrs
 from von_agent.schema import SchemaKey, SchemaStore
 

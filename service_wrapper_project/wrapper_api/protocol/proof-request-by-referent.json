@@ -1,8 +1,8 @@
 {
-    "type": "proof-request-by-claim-uuid",
+    "type": "proof-request-by-referent",
     "data": {
         "schemata": %s,
-        "claim-uuids": %s,
+        "referents": %s,
         "requested-attrs": %s
     }
 }

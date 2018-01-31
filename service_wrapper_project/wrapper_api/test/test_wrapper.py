@@ -327,8 +327,7 @@ async def test_wrapper(pool_ip):
                 agent_profile2did['bc-org-book'])
             url = url_for(cfg[schema_key2issuer_agent_profile[s_key]]['Agent'], 'claim-store')
             r = requests.post(url, json=json.loads(claim_store_json))
-            assert r.status_code == 200
-            # response is empty
+            assert r.status_code == 200  # response is empty
 
     # 7. SRI agent proxies to BC Org Book (as HolderProver) to find claims; actuator filters post hoc
     bc_claim_req_all_json = form_json(
@@ -485,14 +484,19 @@ async def test_wrapper(pool_ip):
 
     i = 0
     for s_key in claim_data:
-        if s_key == S_KEY['BC']:
-            continue
         for c in claim_data[s_key]:
             print('\n\n== 15.{} == Data for SRI claim on [{} v{}]: {}'.format(
                 i,
                 s_key.name,
                 s_key.version,
                 ppjson(c)))
+            i += 1
+
+    i = 0
+    for s_key in claim_data:
+        if s_key == S_KEY['BC']:
+            continue
+        for c in claim_data[s_key]:
             claim_create_json = form_json(
                 'claim-create',
                 (
@@ -506,15 +510,14 @@ async def test_wrapper(pool_ip):
             assert claim[s_key]
 
             print('\n\n== 16.{} == {} claim: {}'.format(i, s_key, ppjson(claim[s_key])))
-            i += 1
             claim_store_json = form_json(
                 'claim-store',
                 (json.dumps(claim[s_key]),),
                 agent_profile2did['pspc-org-book'])
             url = url_for(cfg[schema_key2issuer_agent_profile[s_key]]['Agent'], 'claim-store')
             r = requests.post(url, json=json.loads(claim_store_json))
-            assert r.status_code == 200
-            # response is empty
+            assert r.status_code == 200  # response is empty
+            i += 1
 
     # 14. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, one schema at a time
     i = 0
@@ -659,9 +662,7 @@ async def test_wrapper(pool_ip):
         ppjson(sri_proof_resp)))
     assert len(sri_proof_resp['proof']['proof']['proofs']) == len(sri_display)
     revealed = revealed_attrs(sri_proof_resp['proof'])
-    print('\n\n== 26 == Revealed attrs for above: {}'.format(
-        {referent for referent in sri_display},
-        ppjson(revealed)))
+    print('\n\n== 26 == Revealed attrs for above: {}'.format(ppjson(revealed)))
     assert Counter([attr for c in revealed for attr in revealed[c]]) == Counter(
         [attr for s_key in schema_store.index().values() if s_key != S_KEY['BC']
             for attr in schema_store[s_key]['data']['attr_names'] if attr != 'legalName'])

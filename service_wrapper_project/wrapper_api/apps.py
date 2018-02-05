@@ -18,9 +18,10 @@ from django.apps.config import AppConfig
 from django.core.cache import cache
 from os.path import abspath, dirname, join as pjoin
 from os import environ
-from von_agent.nodepool import NodePool
 from von_agent.agents import Issuer
 from von_agent.demo_agents import TrustAnchorAgent, SRIAgent, BCRegistrarAgent, OrgBookAgent
+from von_agent.nodepool import NodePool
+from von_agent.wallet import Wallet
 from wrapper_api.config import init_config
 from wrapper_api.eventloop import do
 
@@ -86,11 +87,20 @@ class WrapperApiConfig(AppConfig):
                         json.dumps(json.loads(attrs_json))))))
                     logger.info('Originated schema {} version {}'.format(schema_name, schema_version))
 
-                assert schema_json
+                schema = json.loads(schema_json)
+                assert schema
 
                 if isinstance(ag, Issuer):
-                    do(ag.send_claim_def(schema_json))
-
+                    claim_def_json = do(ag.get_claim_def(schema['seqNo'], ag.did))
+                    if json.loads(claim_def_json):
+                        logger.info('Using existing claim def on ledger for schema {} version {}'.format(
+                            schema_name,
+                            schema_version))
+                    else:
+                        do(ag.send_claim_def(schema_json))
+                        logger.info('Created claim def on ledger for schema {} version {}'.format(
+                            schema_name,
+                            schema_version))
 
     def ready(self):
         logger = logging.getLogger(__name__)
@@ -113,9 +123,7 @@ class WrapperApiConfig(AppConfig):
             bootstrap_json = cfg['Agent']
             ag = TrustAnchorAgent(
                 p,
-                cfg['Agent']['seed'],
-                'wallet-{}'.format(profile),
-                None,
+                Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
                 cfg['Agent']['host'],
                 int(cfg['Agent']['port']),
                 base_api_url_path)
@@ -137,27 +145,21 @@ class WrapperApiConfig(AppConfig):
             if role == 'sri':
                 ag = SRIAgent(
                     p,
-                    cfg['Agent']['seed'],
-                    'wallet-{}'.format(profile),
-                    None,
+                    Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
                     cfg['Agent']['host'],
                     int(cfg['Agent']['port']),
                     base_api_url_path)
             elif role == 'org-book':
                 ag = OrgBookAgent(
                     p,
-                    cfg['Agent']['seed'],
-                    'wallet-{}'.format(profile),
-                    None,
+                    Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
                     cfg['Agent']['host'],
                     int(cfg['Agent']['port']),
                     PATH_PREFIX_SLASH.strip('/'))
             elif role == 'bc-registrar':
                 ag = BCRegistrarAgent(
                     p,
-                    cfg['Agent']['seed'],
-                    'wallet-{}'.format(profile),
-                    None,
+                    Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
                     cfg['Agent']['host'],
                     int(cfg['Agent']['port']),
                     base_api_url_path)

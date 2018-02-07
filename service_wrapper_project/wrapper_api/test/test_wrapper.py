@@ -600,13 +600,30 @@ async def test_wrapper(pool_ip):
                 json.dumps([])
             ),
             agent_profile2did['pspc-org-book'])
+        print('\n\n== 22.{}.0 == SRI claims on [{} v{}], no filter: {}'.format(
+            i,
+            s_key.name,
+            s_key.version,
+            ppjson(sri_claim)))
+        assert len(sri_claim['claims']['attrs']) == len(schema_store[s_key]['data']['attr_names'])
 
-        print('\n\n== 22.{} == SRI claims on [{} v{}], no filter: {}'.format(
+        sri_claim = get_post_response(
+            cfg['sri']['Agent'],
+            'claim-request',
+            (
+                json.dumps([]),
+                json.dumps([attr_match(s_key)]),
+                json.dumps([]),
+                json.dumps([])
+            ),
+            agent_profile2did['pspc-org-book'])
+        print('\n\n== 22.{}.1 == SRI claims, filter for all attrs in schema [{} v{}]: {}'.format(
             i,
             s_key.name,
             s_key.version,
             ppjson(sri_claim)))
         i += 1
+        assert len(sri_claim['claims']['attrs']) == len(schema_store[s_key]['data']['attr_names'])
 
     # 19. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, for all schemata, on first attr
     sri_claims_all_first_attr = get_post_response(

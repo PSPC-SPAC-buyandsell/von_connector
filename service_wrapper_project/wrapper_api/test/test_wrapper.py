@@ -21,7 +21,7 @@ from os import walk
 from os.path import abspath, dirname, isfile, join as pjoin
 from time import sleep
 from von_agent.util import ppjson, claims_for, encode, prune_claims_json, revealed_attrs, schema_keys_for
-from von_agent.proto.proto_util import list_schemata, attr_match, req_attrs
+from von_agent.proto.proto_util import list_schemata, attr_match, req_attrs, pred_match, pred_match_match
 from von_agent.schema import SchemaKey, SchemaStore
 
 import atexit
@@ -272,28 +272,28 @@ async def test_wrapper(pool_ip):
     claim_data = {
         S_KEY['BC']: [
             {
-                'id': '1',
+                'id': 1,
                 'busId': '11121398',
-                'orgTypeId': '2',
-                'jurisdictionId': '1',
+                'orgTypeId': 2,
+                'jurisdictionId': 1,
                 'legalName': 'The Original House of Pies',
                 'effectiveDate': '2010-10-10',
                 'endDate': None
             },
             {
-                'id': '2',
+                'id': 2,
                 'busId': '11133333',
-                'orgTypeId': '1',
-                'jurisdictionId': '1',
+                'orgTypeId': 1,
+                'jurisdictionId': 1,
                 'legalName': 'Planet Cake',
                 'effectiveDate': '2011-10-01',
                 'endDate': None
             },
             {
-                'id': '3',
+                'id': 3,
                 'busId': '11144444',
-                'orgTypeId': '2',
-                'jurisdictionId': '1',
+                'orgTypeId': 2,
+                'jurisdictionId': 1,
                 'legalName': 'Tart City',
                 'effectiveDate': '2012-12-01',
                 'endDate': None
@@ -325,7 +325,7 @@ async def test_wrapper(pool_ip):
     bc_claims_all = get_post_response(
         cfg['sri']['Agent'],
         'claim-request',
-        (json.dumps(list_schemata([S_KEY['BC']])), json.dumps([]), json.dumps([])),
+        (json.dumps(list_schemata([S_KEY['BC']])), json.dumps([]), json.dumps([]), json.dumps([])),
         agent_profile2did['bc-org-book'])
     print('\n\n== 7 == All BC claims, no filter: {}'.format(ppjson(bc_claims_all)))
     assert bc_claims_all
@@ -344,7 +344,7 @@ async def test_wrapper(pool_ip):
     get_post_response(  # exercise proof restriction to one claim per attribute
         cfg['sri']['Agent'],
         'proof-request',
-        (json.dumps(list_schemata([S_KEY['BC']])), json.dumps([]), json.dumps([])),
+        (json.dumps(list_schemata([S_KEY['BC']])), json.dumps([]), json.dumps([]), json.dumps([])),
         agent_profile2did['bc-org-book'],
         500)
 
@@ -363,6 +363,7 @@ async def test_wrapper(pool_ip):
                         if k in ('jurisdictionId', 'busId')})
             ]),
             json.dumps([]),
+            json.dumps([])
         ),
         agent_profile2did['bc-org-book'])
     assert bc_claims_prefilt
@@ -388,6 +389,7 @@ async def test_wrapper(pool_ip):
                         if k in ('jurisdictionId', 'busId')})
             ]),
             json.dumps([]),
+            json.dumps([])
         ),
         agent_profile2did['bc-org-book'])
     print('\n\n== 12 == BC proof (req by filter): {}'.format(ppjson(bc_proof_resp)))
@@ -444,7 +446,96 @@ async def test_wrapper(pool_ip):
         ppjson(sri_bc_verification_resp)))
     assert sri_bc_verification_resp
 
-    # 13. Create and store SRI registration completion claims, green claims from verified proof + extra data
+    # 13. BC Org Book agent (as HolderProver) finds claims by predicate on default attr-match, req-attrs w/schema
+    claims_found_pred = get_post_response(
+        cfg['sri']['Agent'],
+        'claim-request',
+        (
+            json.dumps(list_schemata([S_KEY['BC']])),
+            json.dumps([]),
+            json.dumps([
+                pred_match(
+                    S_KEY['BC'],
+                    [
+                        pred_match_match('id', '>=', claim_data[S_KEY['BC']][2]['id'])
+                    ]
+                )
+            ]),
+            json.dumps([req_attrs(S_KEY['BC'])])
+        ),
+        agent_profile2did['bc-org-book'])
+    assert (set(req_attr['name'] for req_attr in claims_found_pred['proof-req']['requested_attrs'].values()) ==
+        set(schema_store[S_KEY['BC']]['data']['attr_names']) - {'id'})
+    assert (set(req_pred['attr_name']
+        for req_pred in claims_found_pred['proof-req']['requested_predicates'].values()) == {'id'})
+
+    # 14. BC Org Book agent (as HolderProver) finds claims by predicate on default attr-match and req-attrs
+    claims_found_pred = get_post_response(
+        cfg['sri']['Agent'],
+        'claim-request',
+        (
+            json.dumps(list_schemata([S_KEY['BC']])),
+            json.dumps([]),
+            json.dumps([
+                pred_match(
+                    S_KEY['BC'],
+                    [
+                        pred_match_match('id', '>=', claim_data[S_KEY['BC']][2]['id'])
+                    ]
+                )
+            ]),
+            json.dumps([])
+        ),
+        agent_profile2did['bc-org-book'])
+    assert (set(req_attr['name'] for req_attr in claims_found_pred['proof-req']['requested_attrs'].values()) ==
+        set(schema_store[S_KEY['BC']]['data']['attr_names']) - {'id'})
+    assert (set(req_pred['attr_name']
+        for req_pred in claims_found_pred['proof-req']['requested_predicates'].values()) == {'id'})
+
+    print('\n\n== 15 == BC claims structure by predicate: {}'.format(ppjson(claims_found_pred)))
+    bc_display_pred = claims_for(claims_found_pred['claims'])
+    print('\n\n== 16 == BC display claims by predicate: {}'.format(ppjson(bc_display_pred)))
+    assert len(bc_display_pred) == 1
+
+    # 15. BC Org Book agent (as HolderProver) creates proof by predicate, default req-attrs
+    bc_proof_resp_pred = get_post_response(
+        cfg['sri']['Agent'],
+        'proof-request',
+        (
+            json.dumps(list_schemata([S_KEY['BC']])),
+            json.dumps([]),
+            json.dumps([
+                pred_match(
+                    S_KEY['BC'],
+                    [
+                        pred_match_match('id', '>=', 2),
+                        pred_match_match('orgTypeId', '>=', 2),
+                    ]  # resolves to one claim
+                )
+            ]),
+            json.dumps([])
+        ),
+        agent_profile2did['bc-org-book'])
+    print('\n\n== 17 == BC proof by predicates id, orgTypeId >= 2: {}'.format(ppjson(bc_proof_resp_pred)))
+    revealed = revealed_attrs(bc_proof_resp_pred['proof'])
+    print('\n\n== 18 == BC proof revealed attrs by predicates id, orgTypeId >= 2: {}'.format(ppjson(revealed)))
+    assert len(revealed) == 1
+    assert (set(revealed[set(revealed.keys()).pop()].keys()) ==
+        set(schema_store[S_KEY['BC']]['data']['attr_names']) - set(('id', 'orgTypeId')))
+
+    # 16. SRI agent (as Verifier) verifies proof (by predicates)
+    sri_bc_verification_resp = get_post_response(
+        cfg['sri']['Agent'],
+        'verification-request',
+        (
+            json.dumps(bc_proof_resp_pred['proof-req']),
+            json.dumps(bc_proof_resp_pred['proof'])
+        ))
+    print('\n\n== 19 == SRI agent verifies BC proof by predicates id, orgTypeId >= 2 as {}'.format(
+        ppjson(sri_bc_verification_resp)))
+    assert sri_bc_verification_resp
+
+    # 17. Create and store SRI registration completion claims, green claims from verified proof + extra data
     revealed = revealed_attrs(bc_proof_resp['proof'])[bc_referent]
     claim_data[S_KEY['SRI-1.0']].append({
         **{k: revealed[k] for k in revealed if k in schema_store[S_KEY['SRI-1.0']]['data']['attr_names']},
@@ -466,7 +557,7 @@ async def test_wrapper(pool_ip):
         if s_key == S_KEY['BC']:
             continue
         for c in claim_data[s_key]:
-            print('\n\n== 15.{} == Data for SRI claim on [{} v{}]: {}'.format(
+            print('\n\n== 20.{} == Data for SRI claim on [{} v{}]: {}'.format(
                 i,
                 s_key.name,
                 s_key.version,
@@ -484,7 +575,7 @@ async def test_wrapper(pool_ip):
                 (json.dumps(claim_req[s_key]), json.dumps(c)))
             assert claim[s_key]
 
-            print('\n\n== 16.{} == {} claim: {}'.format(i, s_key, ppjson(claim[s_key])))
+            print('\n\n== 21.{} == {} claim: {}'.format(i, s_key, ppjson(claim[s_key])))
             get_post_response(
                 cfg[schema_key2issuer_agent_profile[s_key]]['Agent'],
                 'claim-store',
@@ -494,7 +585,7 @@ async def test_wrapper(pool_ip):
                 agent_profile2did['pspc-org-book'])
             i += 1
 
-    # 14. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, one schema at a time
+    # 18. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, one schema at a time
     i = 0
     for s_key in claim_data:
         if s_key == S_KEY['BC']:
@@ -505,60 +596,64 @@ async def test_wrapper(pool_ip):
             (
                 json.dumps(list_schemata([s_key])),
                 json.dumps([]),
+                json.dumps([]),
                 json.dumps([])
             ),
             agent_profile2did['pspc-org-book'])
 
-        print('\n\n== 17.{} == SRI claims on [{} v{}], no filter: {}'.format(
+        print('\n\n== 22.{} == SRI claims on [{} v{}], no filter: {}'.format(
             i,
             s_key.name,
             s_key.version,
             ppjson(sri_claim)))
         i += 1
 
-    # 15. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, for all schemata, on first attr
+    # 19. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, for all schemata, on first attr
     sri_claims_all_first_attr = get_post_response(
         cfg['sri']['Agent'],
         'claim-request',
         (
             json.dumps(list_schemata([s_key for s_key in claim_data if s_key != S_KEY['BC']])),
             json.dumps([]),
+            json.dumps([]),
             json.dumps([req_attrs(s_key, [schema_store[s_key]['data']['attr_names'][0]])
                 for s_key in claim_data if s_key != S_KEY['BC']])
         ),
         agent_profile2did['pspc-org-book'])
 
-    print('\n\n== 18 == All SRI claims at PSPC Org Book, first attr only: {}'.format(ppjson(sri_claims_all_first_attr)))
+    print('\n\n== 23 == All SRI claims at PSPC Org Book, first attr only: {}'.format(ppjson(sri_claims_all_first_attr)))
     assert len(sri_claims_all_first_attr['claims']['attrs']) == (len(schema_store.index()) - 1)  # all except BC
 
-    # 16. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, on all schemata at once
+    # 20. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, on all schemata at once
     sri_claims_all = get_post_response(
         cfg['sri']['Agent'],
         'claim-request',
         (
             json.dumps(list_schemata([s_key for s_key in claim_data if s_key != S_KEY['BC']])),
             json.dumps([]),
+            json.dumps([]),
             json.dumps([])
         ),
         agent_profile2did['pspc-org-book'])
-    print('\n\n== 19 == All SRI claims at PSPC Org Book, all attrs: {}'.format(ppjson(sri_claims_all)))
+    print('\n\n== 24 == All SRI claims at PSPC Org Book, all attrs: {}'.format(ppjson(sri_claims_all)))
     sri_display = claims_for(sri_claims_all['claims'])
-    print('\n\n== 20 == All SRI claims at PSPC Org Book by referent: {}'.format(ppjson(sri_display)))
+    print('\n\n== 25 == All SRI claims at PSPC Org Book by referent: {}'.format(ppjson(sri_display)))
 
-    # 17. SRI agent proxies to PSPC Org Book agent (as HolderProver) to create (multi-claim) proof
+    # 21. SRI agent proxies to PSPC Org Book agent (as HolderProver) to create (multi-claim) proof
     sri_proof_resp = get_post_response(
         cfg['sri']['Agent'],
         'proof-request',
         (
             json.dumps(list_schemata([s_key for s_key in claim_data if s_key != S_KEY['BC']])),
             json.dumps([]),
+            json.dumps([]),
             json.dumps([])
         ),
         agent_profile2did['pspc-org-book'])
-    print('\n\n== 21 == PSPC org book proof response on all claims: {}'.format(ppjson(sri_proof_resp)))
+    print('\n\n== 26 == PSPC org book proof response on all claims: {}'.format(ppjson(sri_proof_resp)))
     assert len(sri_proof_resp['proof']['proof']['proofs']) == len(sri_display)
 
-    # 18. SRI agent (as Verifier) verifies proof
+    # 22. SRI agent (as Verifier) verifies proof
     sri_verification_resp = get_post_response(
         cfg['sri']['Agent'],
         'verification-request',
@@ -566,11 +661,11 @@ async def test_wrapper(pool_ip):
             json.dumps(sri_proof_resp['proof-req']),
             json.dumps(sri_proof_resp['proof'])
         ))
-    print('\n\n== 22 == SRI agent verifies proof (by empty filter) as {}'.format(
+    print('\n\n== 27 == SRI agent verifies proof (by empty filter) as {}'.format(
         ppjson(sri_verification_resp)))
     assert sri_verification_resp
 
-    # 19. SRI agent proxies to PSPC Org Book agent (as HolderProver) to create (multi-claim) proof by referent
+    # 23. SRI agent proxies to PSPC Org Book agent (as HolderProver) to create (multi-claim) proof by referent
     sri_proof_resp = get_post_response(
         cfg['sri']['Agent'],
         'proof-request-by-referent',
@@ -580,12 +675,12 @@ async def test_wrapper(pool_ip):
             json.dumps([])
         ),
         agent_profile2did['pspc-org-book'])
-    print('\n\n== 23 == PSPC org book proof response on referents {}: {}'.format(
+    print('\n\n== 28 == PSPC org book proof response on referents {}: {}'.format(
         {referent for referent in sri_display},
         ppjson(sri_proof_resp)))
     assert len(sri_proof_resp['proof']['proof']['proofs']) == len(sri_display)
 
-    # 20. SRI agent (as Verifier) verifies proof
+    # 24. SRI agent (as Verifier) verifies proof
     sri_verification_resp = get_post_response(
         cfg['sri']['Agent'],
         'verification-request',
@@ -593,12 +688,12 @@ async def test_wrapper(pool_ip):
             json.dumps(sri_proof_resp['proof-req']),
             json.dumps(sri_proof_resp['proof'])
         ))
-    print('\n\n== 24 == SRI agent verifies proof on referents {} as {}'.format(
+    print('\n\n== 29 == SRI agent verifies proof on referents {} as {}'.format(
         {referent for referent in sri_display},
         ppjson(sri_verification_resp)))
     assert sri_verification_resp
 
-    # 21. SRI agent proxies to PSPC Org Book agent to create multi-claim proof by ref, schemata implicit, not legalName
+    # 25. SRI agent proxies to PSPC Org Book agent to create multi-claim proof by ref, schemata implicit, not legalName
     sri_proof_resp = get_post_response(
         cfg['sri']['Agent'],
         'proof-request-by-referent',
@@ -609,17 +704,17 @@ async def test_wrapper(pool_ip):
                 for s_key in claim_data if s_key != S_KEY['BC']])
         ),
         agent_profile2did['pspc-org-book'])
-    print('\n\n== 25 == PSPC org book proof response, schemata implicit, referents {}, not legalName: {}'.format(
+    print('\n\n== 30 == PSPC org book proof response, schemata implicit, referents {}, not legalName: {}'.format(
         {referent for referent in sri_display},
         ppjson(sri_proof_resp)))
     assert len(sri_proof_resp['proof']['proof']['proofs']) == len(sri_display)
     revealed = revealed_attrs(sri_proof_resp['proof'])
-    print('\n\n== 26 == Revealed attrs for above: {}'.format(ppjson(revealed)))
+    print('\n\n== 31 == Revealed attrs for above: {}'.format(ppjson(revealed)))
     assert Counter([attr for c in revealed for attr in revealed[c]]) == Counter(
         [attr for s_key in schema_store.index().values() if s_key != S_KEY['BC']
             for attr in schema_store[s_key]['data']['attr_names'] if attr != 'legalName'])
 
-    # 22. SRI agent (as Verifier) verifies proof
+    # 26. SRI agent (as Verifier) verifies proof
     sri_verification_resp = get_post_response(
         cfg['sri']['Agent'],
         'verification-request',
@@ -627,27 +722,28 @@ async def test_wrapper(pool_ip):
             json.dumps(sri_proof_resp['proof-req']),
             json.dumps(sri_proof_resp['proof'])
         ))
-    print('\n\n== 27 == SRI agent verifies proof on referents {} as {}'.format(
+    print('\n\n== 32 == SRI agent verifies proof on referents {} as {}'.format(
         {referent for referent in sri_display},
         ppjson(sri_verification_resp)))
     assert sri_verification_resp
 
-    # 23. SRI agent proxies to PSPC Org Book agent (as HolderProver) to create proof on req-attrs for green schema attrs
+    # 27. SRI agent proxies to PSPC Org Book agent (as HolderProver) to create proof on req-attrs for green schema attrs
     sri_proof_resp = get_post_response(
         cfg['sri']['Agent'],
         'proof-request',
         (
             json.dumps([]),
             json.dumps([]),
-            json.dumps([req_attrs(S_KEY['GREEN'], [])])
+            json.dumps([]),
+            json.dumps([req_attrs(S_KEY['GREEN'])])
         ),
         agent_profile2did['pspc-org-book'])
-    print('\n\n== 28 == PSPC org book proof to green claims response: {}'.format(ppjson(sri_proof_resp)))
+    print('\n\n== 33 == PSPC org book proof to green claims response: {}'.format(ppjson(sri_proof_resp)))
     assert {sri_proof_resp['proof-req']['requested_attrs'][k]['name']
         for k in sri_proof_resp['proof-req']['requested_attrs']} == set(    
             schema_store[S_KEY['GREEN']]['data']['attr_names'])
 
-    # 24. SRI agent (as Verifier) verifies proof
+    # 28. SRI agent (as Verifier) verifies proof
     sri_verification_resp = get_post_response(
         cfg['sri']['Agent'],
         'verification-request',
@@ -655,23 +751,23 @@ async def test_wrapper(pool_ip):
             json.dumps(sri_proof_resp['proof-req']),
             json.dumps(sri_proof_resp['proof'])
         ))
-    print('\n\n== 29 == SRI agent verifies proof on [{} v{}] attrs as {}'.format(
+    print('\n\n== 34 == SRI agent verifies proof on [{} v{}] attrs as {}'.format(
         S_KEY['GREEN'].name,
         S_KEY['GREEN'].version,
         ppjson(sri_verification_resp)))
     assert sri_verification_resp
 
-    # 25. Exercise helper GET TXN call
+    # 29. Exercise helper GET TXN call
     seq_no = {k for k in schema_store.index().keys()}.pop()  # there will be a real transaction here
     url = url_for(cfg['sri']['Agent'], 'txn/{}'.format(seq_no))
     r = requests.get(url)
     assert r.status_code == 200
     assert r.json()
-    print('\n\n== 30 == ledger transaction #{}: {}'.format(seq_no, ppjson(r.json())))
+    print('\n\n== 35 == ledger transaction #{}: {}'.format(seq_no, ppjson(r.json())))
     
-    # 26. txn# non-existence case
+    # 30. txn# non-existence case
     url = url_for(cfg['sri']['Agent'], 'txn/99999')
     r = requests.get(url)  # ought not exist
     assert r.status_code == 200
-    print('\n\n== 31 == txn #99999: {}'.format(ppjson(r.json())))
+    print('\n\n== 36 == txn #99999: {}'.format(ppjson(r.json())))
     assert not r.json() 

@@ -4,8 +4,7 @@
         "schemata": %s,
         "claim-filter": {
             "attr-match": %s,
-            "predicate-match": [
-            ]
+            "pred-match": %s
         },
         "requested-attrs": %s
     }

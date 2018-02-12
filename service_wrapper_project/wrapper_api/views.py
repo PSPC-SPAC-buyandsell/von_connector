@@ -55,9 +55,9 @@ class ServiceWrapper(APIView):
             logging.exception('Exception on {}: {}'.format(req.path, e))
             # traceback.print_exc()
             return Response(
-                status=500,
+                status=400,
                 data={
-                    'error-code': e.error_code if isinstance(e, IndyError) else 500,
+                    'error-code': e.error_code if isinstance(e, IndyError) else 400,
                     'message': str(e)
                 })
         finally:
@@ -83,8 +83,8 @@ class ServiceWrapper(APIView):
                     'Agent service wrapper API does not respond on GET to URL on path {}'.format(req.path))
         except Exception as e:
             return Response(
-                status=500,
+                status=400,
                 data={
-                    'error-code': e.error_code if isinstance(e, IndyError) else 500,
+                    'error-code': e.error_code if isinstance(e, IndyError) else 400,
                     'message': str(e)
                 })

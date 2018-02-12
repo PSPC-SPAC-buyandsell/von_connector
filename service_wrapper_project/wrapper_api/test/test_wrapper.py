@@ -143,7 +143,7 @@ def get_post_response(cfg_section, msg_type, args, proxy_did=None, rc_http=200):
     assert all(isinstance(x, str) for x in args)
     url = url_for(cfg_section, msg_type)
     r = requests.post(url, json=json.loads(form_json(msg_type, args, proxy_did=proxy_did)))
-    assert r.status_code == rc_http
+    assert r.status_code == rc_http, ppjson(r.json())
     return r.json()
 
 
@@ -346,7 +346,7 @@ async def test_wrapper(pool_ip):
         'proof-request',
         (json.dumps(list_schemata([S_KEY['BC']])), json.dumps([]), json.dumps([]), json.dumps([])),
         agent_profile2did['bc-org-book'],
-        500)
+        400)
 
     bc_display_pruned = prune_claims_json(bc_claims_all['claims'], {k for k in bc_display_pruned_filt_post_hoc})
     print('\n\n== 9 == BC claims stripped down {}'.format(ppjson(bc_display_pruned)))
@@ -431,7 +431,7 @@ async def test_wrapper(pool_ip):
             json.dumps([])
         ),
         agent_profile2did['bc-org-book'],
-        500)
+        400)
 
     # 12. SRI Agent (as Verifier) verifies proof (by referent)
     sri_bc_verification_resp = get_post_response(

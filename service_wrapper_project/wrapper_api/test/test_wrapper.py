@@ -774,17 +774,29 @@ async def test_wrapper(pool_ip):
         ppjson(sri_verification_resp)))
     assert sri_verification_resp
 
-    # 29. Exercise helper GET TXN call
+    # 29. SRI agent proxies to non-agent
+    x_resp = get_post_response(
+        cfg['sri']['Agent'],
+        'claim-hello',
+        (
+            *S_KEY['SRI-1.0'],
+            S_KEY['SRI-1.0'].origin_did
+        ),
+        'XXXXXXXXXXXXXXXXXXXXXX',
+        400)
+    print('\n\n== 35 == Bogus proxy response: {}'.format(ppjson(x_resp)))
+
+    # 30. Exercise helper GET TXN call
     seq_no = {k for k in schema_store.index().keys()}.pop()  # there will be a real transaction here
     url = url_for(cfg['sri']['Agent'], 'txn/{}'.format(seq_no))
     r = requests.get(url)
     assert r.status_code == 200
     assert r.json()
-    print('\n\n== 35 == ledger transaction #{}: {}'.format(seq_no, ppjson(r.json())))
+    print('\n\n== 36 == ledger transaction #{}: {}'.format(seq_no, ppjson(r.json())))
     
-    # 30. txn# non-existence case
+    # 31. txn# non-existence case
     url = url_for(cfg['sri']['Agent'], 'txn/99999')
     r = requests.get(url)  # ought not exist
     assert r.status_code == 200
-    print('\n\n== 36 == txn #99999: {}'.format(ppjson(r.json())))
+    print('\n\n== 37 == txn #99999: {}'.format(ppjson(r.json())))
     assert not r.json() 

@@ -14,33 +14,51 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+from django.conf import settings
 from django.conf.urls import url, include
+from django.core.cache import cache
 from wrapper_api import views
-from .apps import PATH_PREFIX_SLASH
+from rest_framework import routers, serializers, viewsets
 
 
 urlpatterns = [
-    url(r'^{}'.format(PATH_PREFIX_SLASH), include([
-        url(r'^txn/(?P<seq_no>\d+)', views.ServiceWrapper.as_view()),
-        url(r'^did', views.ServiceWrapper.as_view()),
+    url(
+        r'^{}'.format('{}/'.format(cache.get('config')['VON Connector']['api.base.url.path'].strip('/'))),
+        include([
+            url(r'^txn/(?P<seq_no>\d+)', views.ServiceWrapper.as_view()),
+            url(r'^did', views.ServiceWrapper.as_view()),
 
-        # redundant patterns here show explicitly what service wrapper takes as POSTed tokens
-        url(r'^agent-nym-lookup', views.ServiceWrapper.as_view()),
-        url(r'^agent-nym-send', views.ServiceWrapper.as_view()),
-        url(r'^agent-endpoint-lookup', views.ServiceWrapper.as_view()),
-        url(r'^agent-endpoint-send', views.ServiceWrapper.as_view()),
-        url(r'^schema-send', views.ServiceWrapper.as_view()),
-        url(r'^schema-lookup', views.ServiceWrapper.as_view()),
-        url(r'^claim-def-send', views.ServiceWrapper.as_view()),
-        url(r'^master-secret-set', views.ServiceWrapper.as_view()),
-        url(r'^claim-hello', views.ServiceWrapper.as_view()),
-        url(r'^claim-create', views.ServiceWrapper.as_view()),
-        url(r'^claim-store', views.ServiceWrapper.as_view()),
-        url(r'^claim-request', views.ServiceWrapper.as_view()),
-        url(r'^proof-request', views.ServiceWrapper.as_view()),
-        url(r'^proof-request-by-referent', views.ServiceWrapper.as_view()),
-        url(r'^verification-request', views.ServiceWrapper.as_view()),
-        url(r'^claims-reset', views.ServiceWrapper.as_view()),
-    ])),
+            # redundant patterns here show explicitly what service wrapper takes as POSTed tokens
+            url(r'^agent-nym-lookup', views.ServiceWrapper.as_view()),
+            url(r'^agent-nym-send', views.ServiceWrapper.as_view()),
+            url(r'^agent-endpoint-lookup', views.ServiceWrapper.as_view()),
+            url(r'^agent-endpoint-send', views.ServiceWrapper.as_view()),
+            url(r'^schema-send', views.ServiceWrapper.as_view()),
+            url(r'^schema-lookup', views.ServiceWrapper.as_view()),
+            url(r'^claim-def-send', views.ServiceWrapper.as_view()),
+            url(r'^master-secret-set', views.ServiceWrapper.as_view()),
+            url(r'^claim-hello', views.ServiceWrapper.as_view()),
+            url(r'^claim-create', views.ServiceWrapper.as_view()),
+            url(r'^claim-store', views.ServiceWrapper.as_view()),
+            url(r'^claim-request', views.ServiceWrapper.as_view()),
+            url(r'^proof-request', views.ServiceWrapper.as_view()),
+            url(r'^proof-request-by-referent', views.ServiceWrapper.as_view()),
+            url(r'^verification-request', views.ServiceWrapper.as_view()),
+            url(r'^claims-reset', views.ServiceWrapper.as_view()),
+        ])
+    ),
 ]
 
+"""
+# Noodling for static swagger ui proof of concept, known to be deficient in its monolithic base url
+stat = staticfiles_urlpatterns()
+
+print('\n\n -- len: {}'.format(len(stat)))
+for s in stat:
+    print('*** Static URL pattern: {}'.format(s.regex.pattern))
+urlpatterns += stat
+"""
+
+"""
+urlpatterns += staticfiles_urlpatterns()  # hacky, requires DEBUG
+"""

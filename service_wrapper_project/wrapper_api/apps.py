@@ -31,10 +31,6 @@ import json
 import logging
 import requests
 
-
-PATH_PREFIX_SLASH='api/v0/'
-
-
 def _cleanup():
     ag = cache.get('agent')
     if ag is not None:
@@ -102,11 +98,20 @@ class WrapperApiConfig(AppConfig):
                             schema_name,
                             schema_version))
 
+    def agent_config_for(cfg):
+        return {
+            'endpoint': 'http://{}:{}/{}'.format(
+                cfg['Agent']['host'],
+                int(cfg['Agent']['port']),
+                cfg['VON Connector']['api.base.url.path'].strip('/')),
+            'proxy-relay': True
+        }
+
     def ready(self):
         logger = logging.getLogger(__name__)
 
         cfg = init_config()
-        base_api_url_path = PATH_PREFIX_SLASH.strip('/')
+        base_api_url_path = cfg['VON Connector']['api.base.url.path'].strip('/')
 
         role = (cfg['Agent']['role'] or '').lower().replace(' ', '')  # will be a dir as a pool name: spaces are evil
         profile = environ.get('AGENT_PROFILE').lower().replace(' ', '') # several profiles may share a role
@@ -124,9 +129,7 @@ class WrapperApiConfig(AppConfig):
             ag = TrustAnchorAgent(
                 p,
                 Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
-                cfg['Agent']['host'],
-                int(cfg['Agent']['port']),
-                base_api_url_path)
+                WrapperApiConfig.agent_config_for(cfg))
             do(ag.open())
             assert ag.did
             tag_did = ag.did
@@ -146,32 +149,28 @@ class WrapperApiConfig(AppConfig):
                 ag = SRIAgent(
                     p,
                     Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
-                    cfg['Agent']['host'],
-                    int(cfg['Agent']['port']),
-                    base_api_url_path)
+                    WrapperApiConfig.agent_config_for(cfg))
             elif role == 'org-book':
                 ag = OrgBookAgent(
                     p,
                     Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
-                    cfg['Agent']['host'],
-                    int(cfg['Agent']['port']),
-                    PATH_PREFIX_SLASH.strip('/'))
+                    WrapperApiConfig.agent_config_for(cfg))
             elif role == 'bc-registrar':
                 ag = BCRegistrarAgent(
                     p,
                     Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
-                    cfg['Agent']['host'],
-                    int(cfg['Agent']['port']),
-                    base_api_url_path)
+                    WrapperApiConfig.agent_config_for(cfg))
 
             do(ag.open())
             logging.debug("profile {}; ag class {}".format(profile, ag.__class__.__name__))
 
-            trust_anchor_host = cfg['Trust Anchor']['host']
-            trust_anchor_port = cfg['Trust Anchor']['port']
+            trust_anchor_base_url = 'http://{}:{}/{}'.format(
+                cfg['Trust Anchor']['host'],
+                cfg['Trust Anchor']['port'],
+                cfg['VON Connector']['api.base.url.path'].strip('/'))
 
             # trust anchor DID is necessary
-            r = requests.get('http://{}:{}/{}/did'.format(trust_anchor_host, trust_anchor_port, base_api_url_path))
+            r = requests.get('{}/did'.format(trust_anchor_base_url))
             r.raise_for_status()
             tag_did = r.json()
             assert tag_did
@@ -183,7 +182,7 @@ class WrapperApiConfig(AppConfig):
                     j = proto.read()
                 logging.debug("{}; sending {}".format(profile, j % (ag.did, ag.verkey)))
                 r = requests.post(
-                    'http://{}:{}/{}/agent-nym-send'.format(trust_anchor_host, trust_anchor_port, base_api_url_path),
+                    '{}/agent-nym-send'.format(trust_anchor_base_url),
                     json=json.loads(j % (ag.did, ag.verkey)))
                 r.raise_for_status()
 

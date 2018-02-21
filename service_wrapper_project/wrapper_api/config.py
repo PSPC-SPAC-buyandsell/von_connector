@@ -58,4 +58,26 @@ def init_config():
                 {s: dict(parser[s].items()) for s in parser.sections()})
         else:
             raise FileNotFoundError('Configuration file(s) missing; check {}'.format(_inis))
+
+    '''
+    e.g.,
+    {
+        "Pool": {
+            "genesis.txn.path": "/.../von_connector/service_wrapper_project/wrapper_api/config/bootstrap/genesis.txn"
+        },
+        "Agent": {
+            "role": "Trust-Anchor",
+            "host": "127.0.0.1",
+            "seed": "000000000000000000000000Trustee1",
+            "port": "8000"
+        },
+        "VON Connector": {
+            "api.base.url.path": "api/v0"
+        },
+        "Trust Anchor": {
+            "host": "127.0.0.1",
+            "port": "8000"
+        }
+    }
+    '''
     return cache.get('config')

@@ -22,7 +22,6 @@ from rest_framework.parsers import JSONParser
 from rest_framework.views import APIView
 from time import time as epoch
 from wrapper_api.eventloop import do
-from wrapper_api.apps import PATH_PREFIX_SLASH
 from indy.error import IndyError
 
 import asyncio
@@ -31,6 +30,7 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+path_prefix_slash = '{}/'.format(cache.get('config')['VON Connector']['api.base.url.path'].strip('/'))
 
 
 class ServiceWrapper(APIView):
@@ -72,10 +72,10 @@ class ServiceWrapper(APIView):
         assert ag is not None
         try:
             logger.debug('Processing GET [{}]'.format(req.build_absolute_uri()))
-            if req.path.startswith('/{}txn'.format(PATH_PREFIX_SLASH)):
+            if req.path.startswith('/{}txn'.format(path_prefix_slash)):
                 rv_json = do(ag.process_get_txn(int(seq_no)))
                 return Response(json.loads(rv_json))
-            elif req.path.startswith('/{}did'.format(PATH_PREFIX_SLASH)):
+            elif req.path.startswith('/{}did'.format(path_prefix_slash)):
                 rv_json = do(ag.process_get_did())
                 return Response(json.loads(rv_json))
             else:

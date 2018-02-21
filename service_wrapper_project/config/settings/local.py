@@ -30,7 +30,7 @@ import environ
 
 # Build paths inside the project like this: os.path.join(ROOT_DIR, ...)
 ROOT_DIR = environ.Path(__file__) - 3
-APPS_DIR = ROOT_DIR.path('project')
+APPS_DIR = ROOT_DIR.path('wrapper_api')
 
 env = environ.Env()
 
@@ -71,6 +71,7 @@ DJANGO_APPS = (
 
 THIRD_PARTY_APPS = (
     'rest_framework',
+    # 'rest_framework_swagger',
 )
 
 LOCAL_APPS = (
@@ -174,6 +175,13 @@ MEDIA_URL = '/media/'
 
 MEDIA_ROOT = str(APPS_DIR('media'))
 
+'''
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly'
+    ]
+}
+'''
 REST_FRAMEWORK = {
 }
 

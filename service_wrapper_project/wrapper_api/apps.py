@@ -18,6 +18,7 @@ from django.apps.config import AppConfig
 from django.core.cache import cache
 from os.path import abspath, dirname, join as pjoin
 from os import environ
+from rest_framework.exceptions import NotFound
 from von_agent.agents import Issuer
 from von_agent.demo_agents import TrustAnchorAgent, SRIAgent, BCRegistrarAgent, OrgBookAgent
 from von_agent.nodepool import NodePool
@@ -115,7 +116,7 @@ class WrapperApiConfig(AppConfig):
 
         role = (cfg['Agent']['role'] or '').lower().replace(' ', '')  # will be a dir as a pool name: spaces are evil
         profile = environ.get('AGENT_PROFILE').lower().replace(' ', '') # several profiles may share a role
-        logging.debug("Starting agent; profile={}, role={}".format(profile, role))
+        logging.debug('Starting agent; profile={}, role={}'.format(profile, role))
 
         p = None  # the node pool
         p = NodePool('pool.{}'.format(profile), cfg['Pool']['genesis.txn.path'])
@@ -162,29 +163,37 @@ class WrapperApiConfig(AppConfig):
                     WrapperApiConfig.agent_config_for(cfg))
 
             do(ag.open())
-            logging.debug("profile {}; ag class {}".format(profile, ag.__class__.__name__))
+            logging.debug('profile {}; ag class {}'.format(profile, ag.__class__.__name__))
 
             trust_anchor_base_url = 'http://{}:{}/{}'.format(
                 cfg['Trust Anchor']['host'],
                 cfg['Trust Anchor']['port'],
                 cfg['VON Connector']['api.base.url.path'].strip('/'))
 
-            # trust anchor DID is necessary
-            r = requests.get('{}/did'.format(trust_anchor_base_url))
-            r.raise_for_status()
-            tag_did = r.json()
-            assert tag_did
-
-            logging.debug("{}; tag_did {}".format(profile, tag_did))
             # get nym: if not registered; get trust-anchor host & port, post an agent-nym-send form
             if not json.loads(do(ag.get_nym(ag.did))):
-                with open(pjoin(dirname(abspath(__file__)), 'protocol', 'agent-nym-send.json'), 'r') as proto:
-                    j = proto.read()
-                logging.debug("{}; sending {}".format(profile, j % (ag.did, ag.verkey)))
-                r = requests.post(
-                    '{}/agent-nym-send'.format(trust_anchor_base_url),
-                    json=json.loads(j % (ag.did, ag.verkey)))
-                r.raise_for_status()
+                # trust anchor DID is necessary
+                try:
+                    r = requests.get('{}/did'.format(trust_anchor_base_url))
+                    if not r.ok:
+                        logging.error(
+                            'Agent {} nym is not on the ledger, but trust anchor is not responding'.format(profile))
+                        r.raise_for_status()
+                    tag_did = r.json()
+                    logging.debug('{}; tag_did {}'.format(profile, tag_did))
+                    assert tag_did
+
+                    with open(pjoin(dirname(abspath(__file__)), 'protocol', 'agent-nym-send.json'), 'r') as proto:
+                        j = proto.read()
+                    logging.debug('{}; sending {}'.format(profile, j % (ag.did, ag.verkey)))
+                    r = requests.post(
+                        '{}/agent-nym-send'.format(trust_anchor_base_url),
+                        json=json.loads(j % (ag.did, ag.verkey)))
+                    r.raise_for_status()
+                except Exception:
+                    raise NotFound(
+                        detail='Agent {} requires Trust Anchor agent, but it is not responding'.format(profile),
+                        code=500)
 
             # get endpoint: if not present, send it
             if not json.loads(do(ag.get_endpoint(ag.did))):
@@ -202,7 +211,7 @@ class WrapperApiConfig(AppConfig):
                 do(ag.create_master_secret(cfg['Agent']['master.secret'] + '.' + str(getpid())))
 
         else:
-            raise ValueError('Unsupported agent role [{}]'.format(role))
+            raise ValueError('Agent profile {} configured for unsupported role {}'.format(profile, role))
 
         assert ag is not None
 

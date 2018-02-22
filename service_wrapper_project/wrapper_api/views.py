@@ -17,12 +17,14 @@ limitations under the License.
 from django.shortcuts import render
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from indy.error import IndyError
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.parsers import JSONParser
 from rest_framework.views import APIView
 from time import time as epoch
+from von_agent.error import VonAgentError
 from wrapper_api.eventloop import do
-from indy.error import IndyError
 
 import asyncio
 import json
@@ -47,9 +49,9 @@ class ServiceWrapper(APIView):
         assert ag is not None
         try:
             logger.debug('Processing POST [{}], request body: {}'.format(req.build_absolute_uri(), req.body))
-            form = json.loads(req.body.decode("utf-8"))
+            form = json.loads(req.body.decode('utf-8'))
             rv_json = do(ag.process_post(form))
-            return Response(json.loads(rv_json))  # FIXME: this only loads it to dump it: it's already json
+            return Response(json.loads(rv_json))
         except Exception as e:
             import traceback
             logging.exception('Exception on {}: {}'.format(req.path, e))
@@ -57,7 +59,7 @@ class ServiceWrapper(APIView):
             return Response(
                 status=400,
                 data={
-                    'error-code': e.error_code if isinstance(e, IndyError) else 400,
+                    'error-code': int(e.error_code) if isinstance(e, (IndyError, VonAgentError)) else 400,
                     'message': str(e)
                 })
         finally:
@@ -79,12 +81,11 @@ class ServiceWrapper(APIView):
                 rv_json = do(ag.process_get_did())
                 return Response(json.loads(rv_json))
             else:
-                raise ValueError(
-                    'Agent service wrapper API does not respond on GET to URL on path {}'.format(req.path))
+                raise NotFound(detail='Error 404, page not found', code=404)
         except Exception as e:
             return Response(
                 status=400,
                 data={
-                    'error-code': e.error_code if isinstance(e, IndyError) else 400,
+                    'error-code': int(e.error_code) if isinstance(e, (IndyError, VonAgentError)) else 400,
                     'message': str(e)
                 })

@@ -26,7 +26,7 @@ from indy import wallet, pool, did, ledger
 
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("wrapper_api").setLevel(logging.WARN)
-logging.getLogger("von_agent").setLevel(logging.WARN)
+logging.getLogger("von_agent").setLevel(logging.INFO)
 logging.getLogger("indy").setLevel(logging.ERROR)
 logging.getLogger("urllib3").setLevel(logging.ERROR)
 logging.getLogger("requests").setLevel(logging.ERROR)

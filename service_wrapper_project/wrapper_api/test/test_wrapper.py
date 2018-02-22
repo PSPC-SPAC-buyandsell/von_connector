@@ -153,7 +153,7 @@ def claim_value_pair(plain):
 
 #noinspection PyUnusedLocal
 @pytest.mark.asyncio
-async def test_wrapper(pool_ip):
+async def test_wrappers_with_trust_anchor(pool_ip):
     agent_profiles = ['trust-anchor', 'sri', 'pspc-org-book', 'bc-org-book', 'bc-registrar']
 
     # 0. configure
@@ -174,7 +174,7 @@ async def test_wrapper(pool_ip):
 
     print('\n\n== 0 == Test config: {}'.format(ppjson(cfg)))
 
-    # 1. check docker & start wrappers
+    # 1. check pool & start wrappers
     if is_up(pool_ip, 9702):
         print('\n\n== 1 == Using running indy pool network at {}'.format(pool_ip))
     else:
@@ -800,3 +800,59 @@ async def test_wrapper(pool_ip):
     assert r.status_code == 200
     print('\n\n== 37 == txn #99999: {}'.format(ppjson(r.json())))
     assert not r.json() 
+
+    # XX. Shut down service wrappers for next test
+    shutdown(service_wrapper)
+
+
+#noinspection PyUnusedLocal
+@pytest.mark.asyncio
+async def test_no_trust_anchor(pool_ip):
+    """
+    Ensure that non-trust-anchor agents do not need the trust anchor on boot if their nyms are already on the ledger.
+    Note that the prior test has necessarily sent all agent DIDs to the ledger.
+    """
+    agent_profiles = ['sri', 'pspc-org-book', 'bc-org-book', 'bc-registrar']
+
+    # 0. configure
+    cfg = {}
+    parser = ConfigParser()
+    ini = pjoin(dirname(dirname(abspath(__file__))), 'config', 'config.ini')
+    assert isfile(ini)
+    parser.read(ini)
+    cfg = {s: dict(parser[s].items()) for s in parser.sections()}
+
+    for agent_profile in agent_profiles:
+        ini = pjoin(dirname(dirname(abspath(__file__))), 'config', 'agent-profile', '{}.ini'.format(agent_profile))
+        assert isfile(ini)
+        agent_parser = ConfigParser()
+        agent_parser.read(ini)
+
+        cfg[agent_profile] = {s: dict(agent_parser[s].items()) for s in agent_parser.sections()}
+
+    print('\n\n== 0 == Test config: {}'.format(ppjson(cfg)))
+
+    # 1. check pool & start wrappers; pool should be up from last test
+    assert is_up(pool_ip, 9702)
+    print('\n\n== 1 == Using running indy pool network at {}'.format(pool_ip))
+
+    service_wrapper_xtag = {}
+    for agent_profile in agent_profiles:
+        service_wrapper_xtag[agent_profile] = Wrapper(agent_profile, cfg[agent_profile]['Agent'])
+        started = service_wrapper_xtag[agent_profile].start()
+        assert started
+        print('\n\n== 2.{} == started wrapper: {} on {}:{}'.format(
+            agent_profiles.index(agent_profile),
+            agent_profile,
+            cfg[agent_profile]['Agent']['host'],
+            cfg[agent_profile]['Agent']['port']))
+    atexit.register(shutdown, service_wrapper_xtag)
+
+    # 2. ensure all demo agents (wrappers) are up
+    agent_profile2did = {}
+    for agent_profile in agent_profiles:
+        url = url_for(cfg[agent_profile]['Agent'], 'did')
+        # print('\n... url {}'.format(url))
+        r = requests.get(url)
+        # print('\n... done req\n')
+        assert r.status_code == 200

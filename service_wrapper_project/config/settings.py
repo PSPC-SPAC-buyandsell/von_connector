@@ -163,7 +163,7 @@ STATIC_URL = '/static/'
 STATIC_ROOT = str(ROOT_DIR('staticfiles'))
 
 STATICFILES_DIRS = (
-    str(APPS_DIR.path('static')),
+    # str(APPS_DIR.path('static')),
 )
 
 STATICFILES_FINDERS = (

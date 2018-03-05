@@ -64,7 +64,8 @@ class Wrapper:
         self._proc = pexpect.spawn(self._script)
         rc = self._proc.expect(
             [
-                'Quit the server with CONTROL-C[.]',
+                '.* Booting worker with pid: \d+',
+                # 'Quit the server with CONTROL-C[.]',
                 'indy[.]error[.]IndyError.+\r\n',
                 pexpect.EOF,
                 pexpect.TIMEOUT
@@ -186,7 +187,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
         started = service_wrapper[agent_profile].start()
         print('\n\n== 2.{} == {} wrapper: {} on {}:{}'.format(
             agent_profiles.index(agent_profile),
-            'started' if started else 'using running',
+            'Starting' if started else 'Using running',
             agent_profile,
             cfg[agent_profile]['Agent']['host'],
             cfg[agent_profile]['Agent']['port']))

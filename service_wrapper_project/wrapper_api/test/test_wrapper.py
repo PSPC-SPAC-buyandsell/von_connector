@@ -116,16 +116,7 @@ def form_json(msg_type, args, proxy_did=None):
     msg_json = raw_json % args
     rv = msg_json
     if proxy_did:
-        assert msg_type in (
-            'agent-nym-send',
-            'agent-endpoint-send',
-            'claim-def-send',
-            'claim-hello',
-            'claim-store',
-            'claim-request',
-            'proof-request',
-            'proof-request-by-referent',
-            'verification-request')
+        assert msg_type not in ('master-secret-set', 'claims-reset')
         # print("... form_json json-loading {}".format(msg_json))
         msg = json.loads(msg_json)
         msg['data']['proxy-did'] = proxy_did
@@ -144,7 +135,7 @@ def get_post_response(cfg_section, msg_type, args, proxy_did=None, rc_http=200):
     assert all(isinstance(x, str) for x in args)
     url = url_for(cfg_section, msg_type)
     r = requests.post(url, json=json.loads(form_json(msg_type, args, proxy_did=proxy_did)))
-    assert r.status_code == rc_http, ppjson(r.json())
+    assert r.status_code == rc_http, 'Expected HTTP status code {} - received {}'.format(rc_http, r.status_code)
     return r.json()
 
 
@@ -252,21 +243,37 @@ async def test_wrappers_with_trust_anchor(pool_ip):
             ())
         assert not reset_resp
 
-    # 5. Issuers send claim-hello to HolderProvers
+    # 5. Issuers create claim-offer for HolderProvers (by proxy via Issuer) to store
+    claim_offer = {}
     claim_req = {}
     i = 0
     for s_key in schema_store.index().values():
+        claim_offer[s_key] = get_post_response(
+            cfg['bc-registrar']['Agent']
+                if s_key.origin_did == agent_profile2did['bc-registrar']
+                else cfg['sri']['Agent'],
+            'claim-offer-create',
+            (
+                *s_key,
+                agent_profile2did['bc-org-book'
+                    if s_key.origin_did == agent_profile2did['bc-registrar']
+                    else 'pspc-org-book']
+            )
+        )
+        assert claim_offer[s_key]
+        print('\n\n== 5.{}.0 == Claim offer {}: {}'.format(i, s_key, ppjson(claim_offer[s_key])))
+
         claim_req[s_key] = get_post_response(
             cfg['bc-registrar']['Agent']
                 if s_key.origin_did == agent_profile2did['bc-registrar']
                 else cfg['sri']['Agent'],
-            'claim-hello',
-            (*s_key, s_key.origin_did),
-            agent_profile2did['bc-org-book']
+            'claim-offer-store',
+            (json.dumps(claim_offer[s_key]),),
+            agent_profile2did['bc-org-book'
                 if s_key.origin_did == agent_profile2did['bc-registrar']
-                else agent_profile2did['pspc-org-book'])
+                else 'pspc-org-book'])
         assert claim_req[s_key]
-        print('\n\n== 5.{} == Claim request {}: {}'.format(i, s_key, ppjson(claim_req[s_key])))
+        print('\n\n== 5.{}.1 == Claim request {}: {}'.format(i, s_key, ppjson(claim_req[s_key])))
         i += 1
 
     # 6. BC Registrar creates claims and stores at BC Org Book (as HolderProver)
@@ -778,10 +785,9 @@ async def test_wrappers_with_trust_anchor(pool_ip):
     # 29. SRI agent proxies to non-agent
     x_resp = get_post_response(
         cfg['sri']['Agent'],
-        'claim-hello',
+        'claim-def-send',
         (
             *S_KEY['SRI-1.0'],
-            S_KEY['SRI-1.0'].origin_did
         ),
         'XXXXXXXXXXXXXXXXXXXXXX',
         400)

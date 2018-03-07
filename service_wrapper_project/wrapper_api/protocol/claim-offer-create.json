@@ -1,11 +1,11 @@
 {
-    "type": "claim-hello",
+    "type": "claim-offer-create",
     "data": {
         "schema": {
             "origin-did": "%s",
             "name": "%s",
             "version": "%s"
         },
-        "issuer-did": "%s"
+        "holder-did": "%s"
     }
 }

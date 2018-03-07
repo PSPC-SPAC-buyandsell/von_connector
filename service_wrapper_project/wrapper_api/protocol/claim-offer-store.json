@@ -1,0 +1,6 @@
+{
+    "type": "claim-offer-store",
+    "data": {
+        "claim-offer": %s
+    }
+}

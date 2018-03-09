@@ -129,7 +129,7 @@ class WrapperApiConfig(AppConfig):
             bootstrap_json = cfg['Agent']
             ag = TrustAnchorAgent(
                 p,
-                Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
+                Wallet(p.name, cfg['Agent']['seed'], profile, None),
                 WrapperApiConfig.agent_config_for(cfg))
             do(ag.open())
             assert ag.did
@@ -137,7 +137,7 @@ class WrapperApiConfig(AppConfig):
             
             # register trust anchor if need be
             if not json.loads(do(ag.get_nym(ag.did))):
-                do(ag.send_nym(ag.did, ag.verkey))
+                do(ag.send_nym(ag.did, ag.verkey, ag.wallet.profile))
             if not json.loads(do(ag.get_endpoint(ag.did))):
                 do(ag.send_endpoint())
 
@@ -149,17 +149,17 @@ class WrapperApiConfig(AppConfig):
             if role == 'sri':
                 ag = SRIAgent(
                     p,
-                    Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
+                    Wallet(p.name, cfg['Agent']['seed'], profile, None),
                     WrapperApiConfig.agent_config_for(cfg))
             elif role == 'org-book':
                 ag = OrgBookAgent(
                     p,
-                    Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
+                    Wallet(p.name, cfg['Agent']['seed'], profile, None),
                     WrapperApiConfig.agent_config_for(cfg))
             elif role == 'bc-registrar':
                 ag = BCRegistrarAgent(
                     p,
-                    Wallet(p.name, cfg['Agent']['seed'], 'wallet-{}'.format(profile), None),
+                    Wallet(p.name, cfg['Agent']['seed'], profile, None),
                     WrapperApiConfig.agent_config_for(cfg))
 
             do(ag.open())

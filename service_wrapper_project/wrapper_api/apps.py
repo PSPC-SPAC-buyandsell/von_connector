@@ -129,7 +129,7 @@ class WrapperApiConfig(AppConfig):
             bootstrap_json = cfg['Agent']
             ag = TrustAnchorAgent(
                 p,
-                Wallet(p.name, cfg['Agent']['seed'], profile, None),
+                Wallet(p.name, cfg['Agent']['seed'], profile),
                 WrapperApiConfig.agent_config_for(cfg))
             do(ag.open())
             assert ag.did
@@ -149,17 +149,17 @@ class WrapperApiConfig(AppConfig):
             if role == 'sri':
                 ag = SRIAgent(
                     p,
-                    Wallet(p.name, cfg['Agent']['seed'], profile, None),
+                    Wallet(p.name, cfg['Agent']['seed'], profile),
                     WrapperApiConfig.agent_config_for(cfg))
             elif role == 'org-book':
                 ag = OrgBookAgent(
                     p,
-                    Wallet(p.name, cfg['Agent']['seed'], profile, None),
+                    Wallet(p.name, cfg['Agent']['seed'], profile),
                     WrapperApiConfig.agent_config_for(cfg))
             elif role == 'bc-registrar':
                 ag = BCRegistrarAgent(
                     p,
-                    Wallet(p.name, cfg['Agent']['seed'], profile, None),
+                    Wallet(p.name, cfg['Agent']['seed'], profile),
                     WrapperApiConfig.agent_config_for(cfg))
 
             do(ag.open())

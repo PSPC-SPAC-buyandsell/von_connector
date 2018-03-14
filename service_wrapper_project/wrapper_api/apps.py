@@ -37,9 +37,9 @@ def _cleanup():
     if ag is not None:
         do(ag.close())
 
-    p = cache.get('pool')
-    if p is not None:
-        do(p.close())
+    pool = cache.get('pool')
+    if pool is not None:
+        do(pool.close())
 
 class WrapperApiConfig(AppConfig):
     name = 'wrapper_api'
@@ -118,18 +118,17 @@ class WrapperApiConfig(AppConfig):
         profile = environ.get('AGENT_PROFILE').lower().replace(' ', '') # several profiles may share a role
         logging.debug('Starting agent; profile={}, role={}'.format(profile, role))
 
-        p = None  # the node pool
-        p = NodePool('pool.{}'.format(profile), cfg['Pool']['genesis.txn.path'])
-        do(p.open())
-        assert p.handle
-        cache.set('pool', p)
+        pool = NodePool('pool.{}'.format(profile), cfg['Pool']['genesis.txn.path'])
+        do(pool.open())
+        assert pool.handle
+        cache.set('pool', pool)
 
         ag = None
         if role == 'trust-anchor':
             bootstrap_json = cfg['Agent']
             ag = TrustAnchorAgent(
-                p,
-                Wallet(p.name, cfg['Agent']['seed'], profile),
+                pool,
+                do(Wallet(pool, cfg['Agent']['seed'], profile).create()),
                 WrapperApiConfig.agent_config_for(cfg))
             do(ag.open())
             assert ag.did
@@ -148,18 +147,18 @@ class WrapperApiConfig(AppConfig):
             # create agent via factory by role
             if role == 'sri':
                 ag = SRIAgent(
-                    p,
-                    Wallet(p.name, cfg['Agent']['seed'], profile),
+                    pool,
+                    do(Wallet(pool, cfg['Agent']['seed'], profile).create()),
                     WrapperApiConfig.agent_config_for(cfg))
             elif role == 'org-book':
                 ag = OrgBookAgent(
-                    p,
-                    Wallet(p.name, cfg['Agent']['seed'], profile),
+                    pool,
+                    do(Wallet(pool, cfg['Agent']['seed'], profile).create()),
                     WrapperApiConfig.agent_config_for(cfg))
             elif role == 'bc-registrar':
                 ag = BCRegistrarAgent(
-                    p,
-                    Wallet(p.name, cfg['Agent']['seed'], profile),
+                    pool,
+                    do(Wallet(pool, cfg['Agent']['seed'], profile).create()),
                     WrapperApiConfig.agent_config_for(cfg))
 
             do(ag.open())

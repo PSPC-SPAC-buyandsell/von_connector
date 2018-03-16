@@ -26,7 +26,6 @@ from time import time as epoch
 from von_agent.error import VonAgentError
 from wrapper_api.eventloop import do
 
-import asyncio
 import json
 import logging
 
@@ -53,9 +52,7 @@ class ServiceWrapper(APIView):
             rv_json = do(ag.process_post(form))
             return Response(json.loads(rv_json))
         except Exception as e:
-            import traceback
-            logging.exception('Exception on {}: {}'.format(req.path, e))
-            # traceback.print_exc()
+            logger.exception('Exception on {}: {}'.format(req.path, e))
             return Response(
                 status=400,
                 data={

@@ -127,7 +127,6 @@ class WrapperApiConfig(AppConfig):
         if role == 'trust-anchor':
             bootstrap_json = cfg['Agent']
             ag = TrustAnchorAgent(
-                pool,
                 do(Wallet(pool, cfg['Agent']['seed'], profile).create()),
                 WrapperApiConfig.agent_config_for(cfg))
             do(ag.open())
@@ -147,17 +146,14 @@ class WrapperApiConfig(AppConfig):
             # create agent via factory by role
             if role == 'sri':
                 ag = SRIAgent(
-                    pool,
                     do(Wallet(pool, cfg['Agent']['seed'], profile).create()),
                     WrapperApiConfig.agent_config_for(cfg))
             elif role == 'org-book':
                 ag = OrgBookAgent(
-                    pool,
                     do(Wallet(pool, cfg['Agent']['seed'], profile).create()),
                     WrapperApiConfig.agent_config_for(cfg))
             elif role == 'bc-registrar':
                 ag = BCRegistrarAgent(
-                    pool,
                     do(Wallet(pool, cfg['Agent']['seed'], profile).create()),
                     WrapperApiConfig.agent_config_for(cfg))
 

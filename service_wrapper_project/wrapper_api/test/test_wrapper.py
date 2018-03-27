@@ -22,7 +22,8 @@ from os.path import abspath, dirname, isfile, join as pjoin
 from time import sleep
 from von_agent.util import ppjson, claims_for, encode, prune_claims_json, revealed_attrs, schema_keys_for
 from von_agent.proto.proto_util import list_schemata, attr_match, req_attrs, pred_match, pred_match_match
-from von_agent.schema import SchemaKey, SchemaStore
+from von_agent.schemakey import SchemaKey
+from von_agent.cache import schema_cache
 
 import atexit
 import datetime
@@ -215,8 +216,6 @@ async def test_wrappers_with_trust_anchor(pool_ip):
     claim = {}
 
     # 3. get schemata
-    schema_store = SchemaStore()
-
     i = 0
     for profile in agent_profiles:
         if 'Origin' not in cfg[profile]:
@@ -224,7 +223,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
         for name in cfg[profile]['Origin']:  # read each schema once - each schema has one originator
             for version in (v.strip() for v in cfg[profile]['Origin'][name].split(',')):
                 s_key = SchemaKey(agent_profile2did[profile], name, version)
-                schema_store[s_key] = get_post_response(
+                schema_cache[s_key] = get_post_response(
                     cfg[profile]['Agent'],
                     'schema-lookup', 
                     (
@@ -232,7 +231,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
                         name,
                         version
                     ))
-                print('\n\n== 4.{} == Schema [{}]: {}'.format(i, s_key, ppjson(schema_store[s_key])))
+                print('\n\n== 4.{} == Schema [{}]: {}'.format(i, s_key, ppjson(schema_cache[s_key])))
                 i += 1
 
     # 4. BC Org Book, PSPC Org Book (as HolderProvers) respond to claims-reset directive, to restore state to base line
@@ -247,7 +246,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
     claim_offer = {}
     claim_req = {}
     i = 0
-    for s_key in schema_store.index().values():
+    for s_key in schema_cache.index().values():
         claim_offer[s_key] = get_post_response(
             cfg['bc-registrar']['Agent']
                 if s_key.origin_did == agent_profile2did['bc-registrar']
@@ -473,7 +472,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
         ),
         agent_profile2did['bc-org-book'])
     assert (set(req_attr['name'] for req_attr in claims_found_pred['proof-req']['requested_attrs'].values()) ==
-        set(schema_store[S_KEY['BC']]['data']['attr_names']) - {'id'})
+        set(schema_cache[S_KEY['BC']]['data']['attr_names']) - {'id'})
     assert (set(req_pred['attr_name']
         for req_pred in claims_found_pred['proof-req']['requested_predicates'].values()) == {'id'})
 
@@ -496,7 +495,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
         ),
         agent_profile2did['bc-org-book'])
     assert (set(req_attr['name'] for req_attr in claims_found_pred['proof-req']['requested_attrs'].values()) ==
-        set(schema_store[S_KEY['BC']]['data']['attr_names']) - {'id'})
+        set(schema_cache[S_KEY['BC']]['data']['attr_names']) - {'id'})
     assert (set(req_pred['attr_name']
         for req_pred in claims_found_pred['proof-req']['requested_predicates'].values()) == {'id'})
 
@@ -529,7 +528,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
     print('\n\n== 18 == BC proof revealed attrs by predicates id, orgTypeId >= 2: {}'.format(ppjson(revealed)))
     assert len(revealed) == 1
     assert (set(revealed[set(revealed.keys()).pop()].keys()) ==
-        set(schema_store[S_KEY['BC']]['data']['attr_names']) - set(('id', 'orgTypeId')))
+        set(schema_cache[S_KEY['BC']]['data']['attr_names']) - set(('id', 'orgTypeId')))
 
     # 16. SRI agent (as Verifier) verifies proof (by predicates)
     sri_bc_verification_resp = get_post_response(
@@ -546,16 +545,16 @@ async def test_wrappers_with_trust_anchor(pool_ip):
     # 17. Create and store SRI registration completion claims, green claims from verified proof + extra data
     revealed = revealed_attrs(bc_proof_resp['proof'])[bc_referent]
     claim_data[S_KEY['SRI-1.0']].append({
-        **{k: revealed[k] for k in revealed if k in schema_store[S_KEY['SRI-1.0']]['data']['attr_names']},
+        **{k: revealed[k] for k in revealed if k in schema_cache[S_KEY['SRI-1.0']]['data']['attr_names']},
         'sriRegDate': datetime.date.today().strftime('%Y-%m-%d')
     })
     claim_data[S_KEY['SRI-1.1']].append({
-        **{k: revealed[k] for k in revealed if k in schema_store[S_KEY['SRI-1.1']]['data']['attr_names']},
+        **{k: revealed[k] for k in revealed if k in schema_cache[S_KEY['SRI-1.1']]['data']['attr_names']},
         'sriRegDate': datetime.date.today().strftime('%Y-%m-%d'),
         'businessLang': 'EN-CA'
     })
     claim_data[S_KEY['GREEN']].append({
-        **{k: revealed[k] for k in revealed if k in schema_store[S_KEY['GREEN']]['data']['attr_names']},
+        **{k: revealed[k] for k in revealed if k in schema_cache[S_KEY['GREEN']]['data']['attr_names']},
         'greenLevel': 'Silver',
         'auditDate': datetime.date.today().strftime('%Y-%m-%d')
     })
@@ -613,7 +612,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
             s_key.name,
             s_key.version,
             ppjson(sri_claim)))
-        assert len(sri_claim['claims']['attrs']) == len(schema_store[s_key]['data']['attr_names'])
+        assert len(sri_claim['claims']['attrs']) == len(schema_cache[s_key]['data']['attr_names'])
 
         sri_claim = get_post_response(
             cfg['sri']['Agent'],
@@ -631,7 +630,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
             s_key.version,
             ppjson(sri_claim)))
         i += 1
-        assert len(sri_claim['claims']['attrs']) == len(schema_store[s_key]['data']['attr_names'])
+        assert len(sri_claim['claims']['attrs']) == len(schema_cache[s_key]['data']['attr_names'])
 
     # 19. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, for all schemata, on first attr
     sri_claims_all_first_attr = get_post_response(
@@ -641,13 +640,13 @@ async def test_wrappers_with_trust_anchor(pool_ip):
             json.dumps(list_schemata([s_key for s_key in claim_data if s_key != S_KEY['BC']])),
             json.dumps([]),
             json.dumps([]),
-            json.dumps([req_attrs(s_key, [schema_store[s_key]['data']['attr_names'][0]])
+            json.dumps([req_attrs(s_key, [schema_cache[s_key]['data']['attr_names'][0]])
                 for s_key in claim_data if s_key != S_KEY['BC']])
         ),
         agent_profile2did['pspc-org-book'])
 
     print('\n\n== 23 == All SRI claims at PSPC Org Book, first attr only: {}'.format(ppjson(sri_claims_all_first_attr)))
-    assert len(sri_claims_all_first_attr['claims']['attrs']) == (len(schema_store.index()) - 1)  # all except BC
+    assert len(sri_claims_all_first_attr['claims']['attrs']) == (len(schema_cache.index()) - 1)  # all except BC
 
     # 20. SRI agent proxies to PSPC Org Book agent (as HolderProver) to find all claims, on all schemata at once
     sri_claims_all = get_post_response(
@@ -725,7 +724,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
         (
             json.dumps([]),
             json.dumps([referent for referent in sri_display]),
-            json.dumps([req_attrs(s_key, [a for a in schema_store[s_key]['data']['attr_names'] if a != 'legalName'])
+            json.dumps([req_attrs(s_key, [a for a in schema_cache[s_key]['data']['attr_names'] if a != 'legalName'])
                 for s_key in claim_data if s_key != S_KEY['BC']])
         ),
         agent_profile2did['pspc-org-book'])
@@ -736,8 +735,8 @@ async def test_wrappers_with_trust_anchor(pool_ip):
     revealed = revealed_attrs(sri_proof_resp['proof'])
     print('\n\n== 31 == Revealed attrs for above: {}'.format(ppjson(revealed)))
     assert Counter([attr for c in revealed for attr in revealed[c]]) == Counter(
-        [attr for s_key in schema_store.index().values() if s_key != S_KEY['BC']
-            for attr in schema_store[s_key]['data']['attr_names'] if attr != 'legalName'])
+        [attr for s_key in schema_cache.index().values() if s_key != S_KEY['BC']
+            for attr in schema_cache[s_key]['data']['attr_names'] if attr != 'legalName'])
 
     # 26. SRI agent (as Verifier) verifies proof
     sri_verification_resp = get_post_response(
@@ -766,7 +765,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
     print('\n\n== 33 == PSPC org book proof to green claims response: {}'.format(ppjson(sri_proof_resp)))
     assert {sri_proof_resp['proof-req']['requested_attrs'][k]['name']
         for k in sri_proof_resp['proof-req']['requested_attrs']} == set(    
-            schema_store[S_KEY['GREEN']]['data']['attr_names'])
+            schema_cache[S_KEY['GREEN']]['data']['attr_names'])
 
     # 28. SRI agent (as Verifier) verifies proof
     sri_verification_resp = get_post_response(
@@ -794,7 +793,7 @@ async def test_wrappers_with_trust_anchor(pool_ip):
     print('\n\n== 35 == Bogus proxy response: {}'.format(ppjson(x_resp)))
 
     # 30. Exercise helper GET TXN call
-    seq_no = {k for k in schema_store.index().keys()}.pop()  # there will be a real transaction here
+    seq_no = {k for k in schema_cache.index().keys()}.pop()  # there will be a real transaction here
     url = url_for(cfg['sri']['Agent'], 'txn/{}'.format(seq_no))
     r = requests.get(url)
     assert r.status_code == 200

@@ -44,6 +44,7 @@ def is_up(host, port):
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
         sock.settimeout(5)
         rc = sock.connect_ex((host, port))
+    # print('\n\n-- X -- {}:{} is {}'.format(host, port, 'UP' if rc == 0 else 'DOWN'))
     return (rc == 0)
 
 
@@ -65,8 +66,8 @@ class Wrapper:
         self._proc = pexpect.spawn(self._script)
         rc = self._proc.expect(
             [
-                '.* Booting worker with pid: \d+',
-                # 'Quit the server with CONTROL-C[.]',
+                # '.* Booting worker with pid: \d+',
+                'Quit the server with CONTROL-C[.]',
                 'indy[.]error[.]IndyError.+\r\n',
                 pexpect.EOF,
                 pexpect.TIMEOUT
@@ -122,13 +123,13 @@ def form_json(msg_type, args, proxy_did=None):
         msg = json.loads(msg_json)
         msg['data']['proxy-did'] = proxy_did
         rv = json.dumps(msg, indent=4)
-    # print('... form_json composed {} form: {}'.format(msg_type, ppjson(rv)))
+    # print('\n... form_json composed {} form: {}'.format(msg_type, ppjson(rv)))
     return rv
 
 
 def url_for(cfg_section, suffix=''):
     rv = 'http://{}:{}/api/v0/{}'.format(cfg_section['host'], cfg_section['port'], suffix).strip('/')
-    # print('... interpolated URL: {}'.format(rv))
+    # print('\n... interpolated URL: {}'.format(rv))
     return rv
 
 

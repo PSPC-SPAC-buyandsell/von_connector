@@ -59,6 +59,11 @@ class WrapperApiConfig(AppConfig):
             return
         for schema_name in cfg['Origin']:
             for schema_version in (v.strip() for v in cfg['Origin'][schema_name].split(',')):
+                logger.info('Agent {} processing: schema {} version {}'.format(
+                    ag.wallet.name,
+                    schema_name,
+                    schema_version))
+
                 j = None
                 attrs_json = None
                 with open(pjoin(dirname(abspath(__file__)), 'protocol', 'schema-lookup.json'), 'r') as proto_f:
@@ -66,7 +71,9 @@ class WrapperApiConfig(AppConfig):
 
                 schema_json = do(ag.process_post(json.loads(j % (ag.did, schema_name, schema_version))))
 
-                if not json.loads(schema_json):
+                if json.loads(schema_json):
+                    logger.info('Using existing schema {} version {} from ledger'.format(schema_name, schema_version))
+                else:
                     with open(pjoin(dirname(abspath(__file__)), 'protocol', 'schema-send.json'), 'r') as proto_f:
                         j = proto_f.read()
                     with open(pjoin(

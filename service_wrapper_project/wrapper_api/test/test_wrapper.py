@@ -178,6 +178,10 @@ async def test_wrappers_with_trust_anchor(pool_ip):
     for agent_profile in agent_profiles:
         service_wrapper[agent_profile] = Wrapper(agent_profile, cfg[agent_profile]['Agent'])
         started = service_wrapper[agent_profile].start()
+        assert started, '{} wrapper on {}:{} did not start'.format(
+            agent_profile,
+            cfg[agent_profile]['Agent']['host'],
+            cfg[agent_profile]['Agent']['port'])
         print('\n\n== 2.{} == {} wrapper: {} on {}:{}'.format(
             agent_profiles.index(agent_profile),
             'Starting' if started else 'Using running',
@@ -847,7 +851,10 @@ async def test_no_trust_anchor(pool_ip):
     for agent_profile in agent_profiles:
         service_wrapper_xtag[agent_profile] = Wrapper(agent_profile, cfg[agent_profile]['Agent'])
         started = service_wrapper_xtag[agent_profile].start()
-        assert started
+        assert started, '{} wrapper on {}:{} did not start'.format(
+            agent_profile,
+            cfg[agent_profile]['Agent']['host'],
+            cfg[agent_profile]['Agent']['port'])
         print('\n\n== 2.{} == started wrapper: {} on {}:{}'.format(
             agent_profiles.index(agent_profile),
             agent_profile,

@@ -95,16 +95,11 @@ class WrapperApiConfig(AppConfig):
                 assert schema
 
                 if isinstance(ag, Issuer):
-                    claim_def_json = do(ag.get_claim_def(schema['seqNo'], ag.did))
-                    if json.loads(claim_def_json):
-                        logger.info('Using existing claim def on ledger for schema {} version {}'.format(
-                            schema_name,
-                            schema_version))
-                    else:
-                        do(ag.send_claim_def(schema_json))
-                        logger.info('Created claim def on ledger for schema {} version {}'.format(
-                            schema_name,
-                            schema_version))
+                    do(ag.send_claim_def(schema_json))  # calls get-claim-def to create or reuse in wallet, ledger
+                    logger.info('Ensured claim def on ledger and wallet {} for schema {} version {}'.format(
+                        ag.wallet.name,
+                        schema_name,
+                        schema_version))
 
     def agent_config_for(cfg):
         return {
@@ -122,7 +117,7 @@ class WrapperApiConfig(AppConfig):
         base_api_url_path = cfg['VON Connector']['api.base.url.path'].strip('/')
 
         role = (cfg['Agent']['role'] or '').lower().replace(' ', '')  # will be a dir as a pool name: spaces are evil
-        profile = environ.get('AGENT_PROFILE').lower().replace(' ', '') # several profiles may share a role
+        profile = environ.get('AGENT_PROFILE', 'trust-anchor').lower().replace(' ', '') # profiles -n:1-> role
         logging.debug('Starting agent; profile={}, role={}'.format(profile, role))
 
         pool = NodePool('pool.{}'.format(profile), cfg['Pool']['genesis.txn.path'])
